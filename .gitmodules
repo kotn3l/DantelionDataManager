@@ -1,3 +1,6 @@
 [submodule "SoulsFormats"]
 	path = SoulsFormats
 	url = https://github.com/kotn3l/SoulsFormats.git
+[submodule "LibOrbisPkg"]
+	path = LibOrbisPkg
+	url = https://github.com/kotn3l/LibOrbisPkg.git

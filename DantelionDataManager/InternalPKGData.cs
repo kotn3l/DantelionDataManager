@@ -1,15 +1,15 @@
-﻿using LibOrbisPkg.PKG;
+﻿using LibOrbisPkg.PFS;
+using LibOrbisPkg.PKG;
 using LibOrbisPkg.Util;
-using LibOrbisPkg.PFS;
-using System.IO.MemoryMappedFiles;
 using System.Diagnostics;
+using System.IO.MemoryMappedFiles;
 using System.Text.RegularExpressions;
 
 namespace DantelionDataManager
 {
-    public class PKGGameData : GameData
+    public class PKGData : GameData
     {
-        protected class PKGData
+        protected class InternalPKGData
         {
             public string _passcode {  get; internal set; }
             public byte[] _ekpfs { get; internal set; }
@@ -27,12 +27,12 @@ namespace DantelionDataManager
         public const string _pkgroot = "/uroot/dvdroot_ps4";
         public const string _pkguroot = "/uroot";
         public readonly string _defaultRoot;
-        private readonly PKGData _base;
-        private PKGData _patch;
+        private readonly InternalPKGData _base;
+        private InternalPKGData _patch;
         private readonly Dictionary<string, PfsReader.File> _masterFiles;
-        public PKGGameData(string root, string outP, string logId = "DATA") : base(root, outP, logId)
+        public PKGData(string root, string outP, string logId = "DATA") : base(root, outP, logId)
         {
-            _base = new PKGData();
+            _base = new InternalPKGData();
             SetupPKGData(_base, RootPath);
             _masterFiles = new Dictionary<string, PfsReader.File>(_base._files);
 
@@ -43,7 +43,7 @@ namespace DantelionDataManager
 
         public void LoadPatch(string patchPath)
         {
-            _patch = new PKGData();
+            _patch = new InternalPKGData();
             SetupPKGData(_patch, patchPath);
             foreach (var item in _patch._files)
             {
@@ -52,7 +52,7 @@ namespace DantelionDataManager
             }
         }
 
-        protected void SetupPKGData(PKGData data, string location)
+        protected void SetupPKGData(InternalPKGData data, string location)
         {
             _log.LogInfo(this, _logid, "Setting up PKG...");
             var startTime = Stopwatch.GetTimestamp();

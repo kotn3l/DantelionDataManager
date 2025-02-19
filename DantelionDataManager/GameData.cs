@@ -25,7 +25,7 @@ namespace DantelionDataManager
             //_log.LogInfo(null, _logid, "Initalizing GameData of {game} ({p})", Id, Platform);
             if (rootPath.EndsWith(".pkg"))
             {
-                return new PKGGameData(rootPath, outPath, logId);
+                return new PKGData(rootPath, outPath, logId);
             }
             var arch = Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories);
             if (arch.Length < 1)
@@ -49,9 +49,9 @@ namespace DantelionDataManager
         {
             return new DecryptedData(rootPath, outPath, logId);
         }
-        public static PKGGameData InitGameData_PKG(string pkgPath, string outPath, string logId = "DATA")
+        public static PKGData InitGameData_PKG(string pkgPath, string outPath, string logId = "DATA")
         {
-            return new PKGGameData(pkgPath, outPath, logId);
+            return new PKGData(pkgPath, outPath, logId);
         }
         public static EncryptedData InitGameData_PreEldenRing(string rootPath, string outPath, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA")
         {

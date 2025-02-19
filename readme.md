@@ -1,5 +1,5 @@
 # DantelionDataManager
-A .NET library for managing (reading and writing) game files of **FromSoftware games**. Aims to provide easy access to packed game files, but it ultimately supports access to three types of game data:
+A .NET library for managing (reading and writing) game files of **FromSoftware games**. Aims to provide easy access to packed game files, but it ultimately supports access to any of these three types of game data:
 * PKG data [^1] [^2]
 * encrypted (packed) data [^1] [^3]
 * decryped (unpacked) data
@@ -18,12 +18,22 @@ Implementing other games only needs adding a files dictionary, and a keys file.
 [^2]: must be using default pkg password
 [^3]: PC versions of the game
 
+## Notable features
+### Automatic decrypting and BHDCache for fast re-runs (EncryptedData)
+
+When first running the code, all bhds must be decrypted by using the keys in the working *Data* folder -- these are saved along with an MD5 hash as a `.bhdcache` file. On next runs if the cache file is valid, those are used instead for super fast startups. If invalid, they're deleted and automatically recalculated.
+
+The retrieved files from the bdts are also automatically decrypted.
+
+### Patch "loading" (PKGData)
+Supports loading patches for PKGs. This simply means that for files that exists in the patch will be read from there (instead of the main pkg). 
+
 ## Initialization
 
 Can be initialized with calling the constructors of the three main classes (`DecryptedData`, `EncryptedData` or `PKGGameData`), or feel free to use the provided static methods available through `GameData` base class.
 
 All of them take a `rootPath` and an `outPath` parameter, while `EncryptedData` also takes an additional `BHDgame` parameter.
-`rootPath` is where we're reading data from, `outPath` is where we're writing data to -- however, the latter will also get appended with game's name, so you can use the same output folder for all games. An example will be shown in the Writing files section.
+`rootPath` is where we're reading data from, `outPath` is where we're writing data to. An example will be shown in the Writing files section.
 
 ```cs
 //packed game data, root path must be the folder where the game .exe is located
@@ -47,11 +57,11 @@ var darkSouls3PkgData = GameData.InitGameData_PKG(@"D:\DarkSouls3.pkg", @"D:\out
 
 We will use the example games from the Initialization section.
 
-#### Reading data
+### Reading data
+Mainly there are two overloads for two different methods reading files: `Get(..)` for `byte[]` and `GetMem(..)` for `Memory<byte>`.
+#### Reading one file
 
-Mainly there are two overloads for two different methods reading files: `Get(..)` for `byte[]` and `GetMem(..)` for `Memory<byte>`. If a file doesn't exist, it returns empty data (not null).
-
-Below is an example at their first overload, which takes the `relativePath` for the file you want to read. The returned bytes can be used simply with SoulsFormats.
+Below is an example at their first overload, which takes the `relativePath` for the file you want to read. The returned bytes can be used simply with SoulsFormats. **If a file doesn't exist, it returns empty data (not null).**
 
 ```cs
 var bndBytes = eldenRingData.Get("/chr/c2120.chrbnd.dcx");
@@ -61,7 +71,9 @@ var paramMemory = bloodbornePkgData.GetMem("/param/gameparam/gameparam.parambnd.
 var malenia = BND4.Read(bndBytes);
 ```
 
-The second overload takes a `relativePath`, `pattern` and an optional bool `load` parameter. The return value is a `KeyValuePair` collection, with the `Key` being the (relative) file path, and `Value` being the actual file data -- if the `load` parameter is false, the file data won't be loaded aka it will be empty. Only existing files will be present in the collection. 
+#### Reading multiple files
+
+The second overload takes a `relativePath`, `pattern` and an optional bool `load` parameter. The return value is a `KeyValuePair` collection, with the `Key` being the (relative) file path, and `Value` being the actual file data -- if the `load` parameter is false, the file data won't be loaded aka it will be empty. **Only existing files will be present in the collection.**
 
 The `pattern` parameter works similarly on how you would search in Windows file explorer.
 
@@ -84,7 +96,7 @@ foreach (var pair in allChrs)
 }
 ```
 
-#### Writing data
+### Writing data
 
 Similarly like the methods for reading, there's also (only) two methods for writing files: `Set(..)` and `SetMem(..)`. You guessed it, they take a `relativePath` parameter, and either a `byte[]` or `Memory<byte>` data. These methods will always output into the `outPath` folder set earlier in the Initialization section.
 ```cs
@@ -95,7 +107,7 @@ var malenia = BND4.Read(bndBytes);
 
 eldenRingData.Set("/chr/c2120.chrbnd.dcx", malenia.Write());
 //you can set the relativePath to anything.
-//in this case our output file full path will be: "D:\outputfolder\EldenRing\chr\c2120.chrbnd.dcx"
+//in this case our output file full path will be: "D:\outputfolder\chr\c2120.chrbnd.dcx"
 ```
 
 Example with writing multiple files:
@@ -112,3 +124,25 @@ foreach (var pair in allMsbs)
 }
 ```
 
+## Dependencies
+#### [SoulsFormats](https://github.com/kotn3l/SoulsFormats)
+A custom SoulsFormats, that is still using the MemoryMappedFile shenanigans. I just love how performant that is. Updates were manually brought over from [SoulsFormatsNext](https://github.com/soulsmods/SoulsFormatsNEXT).
+
+Added some custom ToStrings and other stuff needed for my yet unreleased conversion tool, but most importantly for this library, I have introduced a Dictionary for the BHD5 FileHeaders, which allows for ultra-fast lookups with the filehashes.
+
+Current branch: [newest](https://github.com/kotn3l/SoulsFormats/tree/newest)
+
+#### [LibOrbisPkg](https://github.com/kotn3l/LibOrbisPkg)
+I ported the library from NET Framework to .NET. Because of too many test framework errors I removed the tests. <sub>(for now, don't @ me--).</sub>
+
+## Screenshots
+The tool is using Serilog for logging, which is default set to write to Console. It looks pretty imo:
+
+## Credits
+This wouldn't be possible with the amazing modding community these game have. Thank you all!, but most notably:
+* TGKP
+* Nordgaren
+* DSMapStudio contributors
+* SoulsFormatsNEXT contributors
+* Meowmaritus
+* if I missed anyone message me

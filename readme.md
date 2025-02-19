@@ -143,7 +143,7 @@ The tool is using Serilog for logging, which is default set to write to Console.
 This wouldn't be possible with the amazing modding community these game have. Thank you all!, but most notably:
 * TGKP
 * Nordgaren
-* DSMapStudio contributors
+* Smithbox contributors
 * SoulsFormatsNEXT contributors
 * Meowmaritus
 

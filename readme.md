@@ -133,7 +133,7 @@ Added some custom ToStrings and other stuff needed for my yet unreleased convers
 Current branch: [newest](https://github.com/kotn3l/SoulsFormats/tree/newest)
 
 #### [LibOrbisPkg](https://github.com/kotn3l/LibOrbisPkg)
-I ported the library from NET Framework to .NET. Because of too many test framework errors I removed the tests. <sub>(for now, don't @ me--).</sub>
+I ported the library from NET Framework to .NET. Because of too many test framework errors I removed the tests. <sub>(for now, don't @ me--).</sub> Quite slow, could use some refactors.
 
 #### Others
 * BouncyCastle.Cryptography
@@ -147,7 +147,7 @@ The tool is using Serilog for logging, which is default set to write to Console.
 ![Log](/img/logpic.png?raw=true "Log")
 
 ## Credits
-This wouldn't be possible with the amazing modding community these game have. Thank you all!, but most notably:
+This wouldn't be possible without the amazing modding community these games have. Thank you all!, but most notably:
 * TGKP
 * Nordgaren
 * Smithbox contributors

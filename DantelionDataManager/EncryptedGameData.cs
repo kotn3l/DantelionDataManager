@@ -1,6 +1,7 @@
 ﻿using DantelionDataManager.Extensions;
 using DantelionDataManager.Log;
 using DotNext.IO.MemoryMappedFiles;
+using LibOrbisPkg.Util;
 using SoulsFormats;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -9,7 +10,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
+using StreamReader = System.IO.StreamReader;
 
 namespace DantelionDataManager
 {
@@ -23,36 +26,99 @@ namespace DantelionDataManager
         public readonly Dictionary<string, string> Keys;
         public readonly Dictionary<string, HashSet<string>> Files;
         public readonly BHD5.Game Id;
-        private EncryptedData(string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA") : base(root, outP, logId)
+
+        private EncryptedData(string root, string outP, BHD5.Game BHDgame, string logId = "DATA") : base(root, outP, logId)
         {
             _log.LogInfo(this, _logid, "Using Encrypted Data");
             _master = new Dictionary<string, BHD5>();
-            Keys = keys;
             Files = new Dictionary<string, HashSet<string>>();
             this.Id = BHDgame;
-            foreach (var k in Keys.Keys)
-            {
-                _master.Add(k, new BHD5(BHDgame));
-                Files.Add(k, new HashSet<string>());
-            }
+
+            _AES = Aes.Create();
+            _AES.Mode = CipherMode.ECB;
+            _AES.Padding = PaddingMode.None;
+            _AES.KeySize = 128;
+
             _relativeCacheDir = $@"Data\{Id}\.cache";
             _absoluteCacheDir = Path.Combine(AssemblyLocation, _relativeCacheDir);
             IOExtensions.CheckDir(_absoluteCacheDir);
+        }
+        private EncryptedData(string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA") : this(root, outP, BHDgame, logId)
+        {
+            Keys = keys;
+            InitKeys();
+        }
+        public EncryptedData(string[] bhdPaths, string root, string outP, BHD5.Game BHDgame, string logId = "DATA") : this(root, outP, BHDgame, logId)
+        {
+            Keys = new Dictionary<string, string>();
+
+            ReadKeys();
+            InitKeys();
+            Init(bhdPaths);
+
+        }
+        public EncryptedData(string[] bhdPaths, string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA") : this(root, outP, BHDgame, keys, logId)
+        {
+            Init(bhdPaths);
+        }
+
+        private void ReadKeys()
+        {
+            string path = Path.Combine(AssemblyLocation, $@"Data\{Id}\keys");
+            if (!File.Exists(path))
+            {
+                _log.LogWarning(this, _logid, "No game keys found at {p}", path);
+                return;
+            }
+
+            using (StreamReader sr = new StreamReader(path))
+            {
+                string line = sr.ReadLine();
+                while (line != null)
+                {
+                    while (line == "" || line[0] != '#')
+                    {
+                        line = sr.ReadLine();
+                    }
+                    string k = line[1..].ToLowerInvariant();
+                    Keys.Add(k, string.Empty);
+                    var sb = new StringBuilder();
+                    while ((line = sr.ReadLine()) != null && line != "" && line[0] != '#')
+                    {
+                        sb.AppendLine(line);
+                        ;
+                        //Keys[k].Add(line.Trim());
+                    }
+                    Keys[k] = sb.ToString();
+                }
+            }
+        }
+
+        private void InitKeys()
+        {
+            foreach (var k in Keys.Keys)
+            {
+                _master.Add(k, new BHD5(Id));
+                Files.Add(k, new HashSet<string>());
+            }
+
             //ReadFileDictionaries();
             ReadFileDictionaryCombined();
             //SaveFileDictionaries();
         }
-        public EncryptedData(string[] bhdPaths, string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA") : this(root, outP, BHDgame, keys, logId)
+
+        private void Init(string[] bhdPaths)
         {
             //int i = 0;
             var startTime = Stopwatch.GetTimestamp();
             //_threads = new Task[files.Length];
+            //foreach (var f in bhdPaths)
             Parallel.ForEach(bhdPaths, f =>
             {
                 string data = GetEncryptedFiles(f).ToLowerInvariant();
                 if (Keys.ContainsKey(data))
                 {
-                    Init(f, data);
+                    InitData(f, data);
                     //_threads[i] = Task.Run(() => Init(f, data));
                     _log.LogInfo(this, _logid, "Starting thread {t}", data);
                     //i++;
@@ -61,20 +127,18 @@ namespace DantelionDataManager
                 {
                     _log.LogWarning(this, _logid, "The BHD key for {d} was not found!", data);
                 }
-            });
+            }
+            );
             //Task.WaitAll(_threads);
             _log.LogInfo(this, _logid, "All threads finished in {t}ms", Stopwatch.GetElapsedTime(startTime).TotalMilliseconds);
             //DictionaryFileCoverage();
             //VerifyFilesInArchive();
             VerifyFilesPerArchive();
-            _AES = Aes.Create();
-            _AES.Mode = CipherMode.ECB;
-            _AES.Padding = PaddingMode.None;
-            _AES.KeySize = 128;
             //SetUnknownFiles();
             //RecalculateFileDistribution(ReadFileNames($"{Id}"), true);
             //RecalculateFileDistribution(ReadFileNames(), true);
         }
+
         private void ReadFileDictionaries()
         {
             foreach (var m in _master.Keys)
@@ -379,7 +443,7 @@ namespace DantelionDataManager
         {
             return file.Substring(RootPath.Length + 1).Split('.')[0];
         }
-        private void Init(string file, string data)
+        private void InitData(string file, string data)
         {
             using var cache = new BHDCache(file, _absoluteCacheDir, $"{data.Replace('\\', '_')}");
             if (cache.IsValid)
@@ -593,7 +657,10 @@ namespace DantelionDataManager
         {
             _log.LogInfo(this, _logid, "Using ER Encrypted Data");
         }
-
+        public ModernEncryptedData(string[] files, string root, string outP, BHD5.Game BHDgame, string logId = "DATA") : base(files, root, outP, BHDgame, logId)
+        {
+            _log.LogInfo(this, _logid, "Using ER Encrypted Data");
+        }
         protected override ulong GetFilePathHash(string path)
         {
             const ulong prime = 0x85ul;

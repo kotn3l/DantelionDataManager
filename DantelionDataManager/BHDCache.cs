@@ -35,8 +35,12 @@ namespace DantelionDataManager
             CachePath = Path.Combine(cacheLocation, cacheName + _extension);
             _cacheDir = cacheLocation;
             _cacheName = cacheName;
-            _encryptedMMF = MemoryMappedFile.CreateFromFile(OriginalPath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
-            _encryptedIMM = _encryptedMMF.CreateMemoryAccessor(0, 0, MemoryMappedFileAccess.Read);
+
+            FileInfo fileInfo = new FileInfo(OriginalPath);
+            long correctSize = fileInfo.Length;
+
+            _encryptedMMF = MemoryMappedFile.CreateFromFile(OriginalPath, FileMode.Open, null, correctSize, MemoryMappedFileAccess.Read);
+            _encryptedIMM = _encryptedMMF.CreateMemoryAccessor(0, (int)correctSize, MemoryMappedFileAccess.Read);
             EncryptedBHD = _encryptedIMM.Memory;
             OriginalMD5 = new byte[16];
             if (_calc.TryComputeHash(EncryptedBHD.Span, OriginalMD5, out _) && File.Exists(CachePath))
@@ -95,7 +99,8 @@ namespace DantelionDataManager
         {
             PemReader pemReader = new PemReader(new StringReader(key));
             AsymmetricKeyParameter keyParameter = (AsymmetricKeyParameter)pemReader.ReadObject();
-            RsaEngine engine = new RsaEngine(); engine.Init(false, keyParameter);
+            RsaEngine engine = new RsaEngine();
+            engine.Init(false, keyParameter);
             MemoryStream outputStream = new MemoryStream();
             int inputBlockSize = engine.GetInputBlockSize();
             int outputBlockSize = engine.GetOutputBlockSize();

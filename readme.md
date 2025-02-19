@@ -12,11 +12,11 @@ In terms of EncrypedData, **it currently only supports:**
 
 Implementing other games only needs adding a files dictionary, and a keys file.
 
-~**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT, Elden Ring v1.0 (PS4), Elden Ring v1.0 (PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.~
+^**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT, Elden Ring v1.0 (PS4), Elden Ring v1.0 (PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.^
 
-[^1]: ~only supports reading data~
-[^2]: ~must be using default pkg password~
-[^3]: ~PC versions of the game~
+[^1]: ^only supports reading data^
+[^2]: ^must be using default pkg password^
+[^3]: ^PC versions of the game^
 
 ## Initialization
 
@@ -61,7 +61,9 @@ var paramMemory = bloodbornePkgData.GetMem("/param/gameparam/gameparam.parambnd.
 var malenia = BND4.Read(bndBytes);
 ```
 
-The second overload takes a `relativePath`, `pattern` and an optional bool `load` parameter. The return value is a `KeyValuePair` collection, with the `Key` being the (relative) file path, and `Value` being the actual file data -- if the `load` parameter is false, the file data won't be loaded aka it will be empty. Only existing files will be present in the collection.
+The second overload takes a `relativePath`, `pattern` and an optional bool `load` parameter. The return value is a `KeyValuePair` collection, with the `Key` being the (relative) file path, and `Value` being the actual file data -- if the `load` parameter is false, the file data won't be loaded aka it will be empty. Only existing files will be present in the collection. 
+
+The `pattern` parameter works similarly on how you would search in Windows file explorer.
 
 Let's take a look on how to use this to get all `.msb` files for the Overworld in Elden Ring (`m60`).
 

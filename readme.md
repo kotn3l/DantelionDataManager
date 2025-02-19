@@ -26,7 +26,7 @@ When first running the code, all bhds must be decrypted by using the keys in the
 The retrieved files from the bdts are also automatically decrypted.
 
 ### Patch "loading" (PKGData)
-Supports loading patches for PKGs. This simply means that for files that exists in the patch will be read from there (instead of the main pkg). 
+Supports loading patches for PKGs. This simply means that for files that exist in the patch will be read from there (instead of the main pkg). 
 
 ## Initialization
 

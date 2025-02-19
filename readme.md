@@ -147,7 +147,7 @@ The tool is using Serilog for logging, which is default set to write to Console.
 ![Log](/img/logpic.png?raw=true "Log")
 
 ## Credits
-This wouldn't be possible with the amazing modding community these games have. Thank you all!, but most notably:
+This wouldn't be possible without the amazing modding community these games have. Thank you all!, but most notably:
 * TGKP
 * Nordgaren
 * Smithbox contributors

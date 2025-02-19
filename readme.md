@@ -12,11 +12,11 @@ In terms of EncrypedData, **it currently only supports:**
 
 Implementing other games only needs adding a files dictionary, and a keys file.
 
-^**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT, Elden Ring v1.0 (PS4), Elden Ring v1.0 (PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.^
+<sub>**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT, Elden Ring v1.0 (PS4), Elden Ring v1.0 (PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.</sub>
 
-[^1]: ^only supports reading data^
-[^2]: ^must be using default pkg password^
-[^3]: ^PC versions of the game^
+[^1]: only supports reading data
+[^2]: must be using default pkg password
+[^3]: PC versions of the game
 
 ## Initialization
 

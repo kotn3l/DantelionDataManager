@@ -17,7 +17,7 @@ namespace DantelionDataManager
         public readonly string RootPath;
         public readonly string OutPath;
         public readonly string AssemblyLocation;
-        protected static string _logid;
+        protected readonly string _logid;
         public readonly ALogWrapper _log;
 
         public static GameData InitGameData(string rootPath, string outPath, BHD5.Game BHDgame = BHD5.Game.EldenRing, Dictionary<string, string> keys = null, bool isModern = false, string logId = "DATA")

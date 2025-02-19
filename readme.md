@@ -135,6 +135,13 @@ Current branch: [newest](https://github.com/kotn3l/SoulsFormats/tree/newest)
 #### [LibOrbisPkg](https://github.com/kotn3l/LibOrbisPkg)
 I ported the library from NET Framework to .NET. Because of too many test framework errors I removed the tests. <sub>(for now, don't @ me--).</sub>
 
+#### Others
+* BouncyCastle.Cryptography
+* CommunityToolkit.HighPerformance
+* DotNext.IO
+* DotNext.Unsafe
+* ZstdNet
+
 ## Screenshot
 The tool is using Serilog for logging, which is default set to write to Console. It looks pretty imo:
 ![Log](/img/logpic.png?raw=true "Log")

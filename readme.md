@@ -10,9 +10,9 @@ In terms of EncrypedData, **it currently only supports:**
 * Elden Ring
 * Armored Core VI
 
-Implementing other games only needs adding a files dictionary, and a keys file.
+Implementing other games only needs adding a files dictionary, and a keys file. This library is intended for tool developers.
 
-<sub>**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT, Elden Ring v1.0 (PS4), Elden Ring v1.0 (PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.</sub>
+<sub>**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT (PS4 and PS5), Elden Ring v1.0 (PS4 and PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.</sub>
 
 [^1]: only supports reading data
 [^2]: must be using default pkg password
@@ -135,8 +135,9 @@ Current branch: [newest](https://github.com/kotn3l/SoulsFormats/tree/newest)
 #### [LibOrbisPkg](https://github.com/kotn3l/LibOrbisPkg)
 I ported the library from NET Framework to .NET. Because of too many test framework errors I removed the tests. <sub>(for now, don't @ me--).</sub>
 
-## Screenshots
+## Screenshot
 The tool is using Serilog for logging, which is default set to write to Console. It looks pretty imo:
+![Log](/img/logpic.png?raw=true "Log")
 
 ## Credits
 This wouldn't be possible with the amazing modding community these game have. Thank you all!, but most notably:
@@ -145,4 +146,5 @@ This wouldn't be possible with the amazing modding community these game have. Th
 * DSMapStudio contributors
 * SoulsFormatsNEXT contributors
 * Meowmaritus
-* if I missed anyone message me
+
+<sub>if I missed anyone message me</sub>

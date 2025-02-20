@@ -61,11 +61,11 @@ namespace DantelionDataManager
         {
             return new ModernEncryptedData(Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), rootPath, outPath, BHDgame,  keys, logId);
         }
-        public static EncryptedData InitGameData_PreEldenRing(string rootPath, string outPath, BHD5.Game BHDgame, string logId = "DATA")
+        public static EncryptedData InitGameData_PreEldenRing(string rootPath, string outPath, BHD5.Game BHDgame = BHD5.Game.DarkSouls3, string logId = "DATA")
         {
             return new EncryptedData(Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), rootPath, outPath, BHDgame, logId);
         }
-        public static EncryptedData InitGameData_PostEldenRing(string rootPath, string outPath, BHD5.Game BHDgame, string logId = "DATA")
+        public static EncryptedData InitGameData_PostEldenRing(string rootPath, string outPath, BHD5.Game BHDgame = BHD5.Game.EldenRing, string logId = "DATA")
         {
             return new ModernEncryptedData(Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), rootPath, outPath, BHDgame, logId);
         }

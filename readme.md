@@ -38,10 +38,10 @@ All of them take a `rootPath` and an `outPath` parameter, while `EncryptedData` 
 ```cs
 //packed game data, root path must be the folder where the game .exe is located
 var eldenRingData = GameData.InitGameData_PostEldenRing(@"C:\SteamLibrary\steamapps\common\ELDEN RING\Game", @"D:\outputfolder", BHD5.Game.EldenRing);
-var armoredCore6Data = GameData.InitGameData_PostEldenRing(@"C:\SteamLibrary\steamapps\common\ARMORED CORE VI FIRES OF RUBICON\Game", @"D:\outputfolder", BHD5.Game.EldenRing); //some games use the same BHD implementation
+var armoredCore6Data = GameData.InitGameData_PostEldenRing(@"C:\SteamLibrary\steamapps\common\ARMORED CORE VI FIRES OF RUBICON\Game", @"D:\outputfolder", BHD5.Game.ArmoredCore6);
 
 var darkSouls3Data = GameData.InitGameData_PreEldenRing(@"C:\SteamLibrary\steamapps\common\Dark Souls III", @"D:\outputfolder", BHD5.Game.DarkSouls3);
-var sekiroEncData = GameData.InitGameData_PreEldenRing(@"C:\SteamLibrary\steamapps\common\Sekiro", @"D:\outputfolder", BHD5.Game.DarkSouls3); //some games use the same BHD implementation
+var sekiroEncData = GameData.InitGameData_PreEldenRing(@"C:\SteamLibrary\steamapps\common\Sekiro", @"D:\outputfolder", BHD5.Game.Sekiro);
 
 //unpacked game data, root path must be where all the unpacked folders are like chr, map etc.
 var sekiroDecData = GameData.InitGameData_Decrypted(@"D:\pathToUnpackedSekiro", @"D:\outputfolder");

@@ -1,7 +1,6 @@
 ﻿using DantelionDataManager.Extensions;
 using DantelionDataManager.Log;
 using DotNext.IO.MemoryMappedFiles;
-using Serilog;
 using SoulsFormats;
 using System.Diagnostics;
 using System.IO.MemoryMappedFiles;
@@ -10,6 +9,34 @@ using System.Text.RegularExpressions;
 
 namespace DantelionDataManager
 {
+    public class GameFile
+    {
+        public string Path { get; private set; }
+        public Memory<byte> Bytes { get; private set; }
+        public ISoulsFile Data { get; set; }
+
+        public GameFile(string path, Memory<byte> bytes)
+        {
+            Path = path;
+            Bytes = bytes;
+        }
+
+        public GameFile(string path, Memory<byte> bytes, Func<Memory<byte>, ISoulsFile> load) : this(path, bytes)
+        {
+            Load(load);
+        }
+
+        public void Load(Func<Memory<byte>, ISoulsFile> load)
+        {
+            Data = load(Bytes);
+        }
+
+        public void Write(GameData data)
+        {
+            Bytes = Data?.Write();
+            data.SetMem(Path, Bytes);
+        }
+    }
     public abstract class GameData
     {
         protected static readonly HashSet<string>_nonCompressedExceptions = ["hks", "bdt", "bhd", "bin", "plt", "prx", "dat", "sha", "dds", "png", "sfo", "xml", "sig", "info", "sprx" ];
@@ -82,8 +109,7 @@ namespace DantelionDataManager
             p.PriorityClass = ProcessPriorityClass.High;
             AssemblyLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         }
-        public abstract bool Exists(string relativePath);
-        public static byte[] GetRegulation(string rootPath)
+        public virtual byte[] GetRegulation(string rootPath)
         {
             string s = $"{rootPath}\\regulation.bin";
             if (File.Exists(s))
@@ -106,11 +132,24 @@ namespace DantelionDataManager
             var accessor = f.CreateMemoryAccessor(0, 0, MemoryMappedFileAccess.Read);
             return accessor.Memory;
         }
-        public abstract byte[] Get(string relativePath);
-        public abstract IEnumerable<KeyValuePair<string, byte[]>> Get(string relativePath, string pattern, bool load = true);
 
-        public abstract Memory<byte> GetMem(string relativePath);
-        public abstract IEnumerable<KeyValuePair<string, Memory<byte>>> GetMem(string relativePath, string pattern, bool load = true);
+        public abstract bool Exists(string relativePath);
+        public abstract GameFile Get(string relativePath);
+        public GameFile Get(string relativePath, Func<Memory<byte>, ISoulsFile> load)
+        {
+            var gf = Get(relativePath);
+            gf.Load(load);
+            return gf;
+        }
+        public abstract IEnumerable<GameFile> Get(string relativePath, string pattern, bool load = true);
+        public IEnumerable<GameFile> Get(string relativePath, string pattern, Func<Memory<byte>, ISoulsFile> load)
+        {
+            foreach (var gf in Get(relativePath, pattern, true))
+            {
+                gf.Load(load);
+                yield return gf;
+            }
+        }
 
         public string Set(string relativePath, byte[] data)
         {
@@ -168,10 +207,10 @@ namespace DantelionDataManager
 
             return (b << 16) | a;
         }
-        protected virtual string CheckPath(string relativePath)
+        protected virtual string CheckPath(string relativePath, bool addDcx = true)
         {
             string t = relativePath.Trim().Replace('\\', '/').ToLowerInvariant();
-            if (!t.EndsWith(".dcx") && t.Split('.').Length > 1 && !_nonCompressedExceptions.Any(t.EndsWith) && !string.IsNullOrWhiteSpace(IOExtensions.GetFileExtensions(t)))
+            if (!t.EndsWith(".dcx") && t.Split('.').Length > 1 && !_nonCompressedExceptions.Any(t.EndsWith) && !string.IsNullOrWhiteSpace(IOExtensions.GetFileExtensions(t)) && addDcx)
             {
                 t += ".dcx";
             }
@@ -187,9 +226,9 @@ namespace DantelionDataManager
         protected static Regex PathPattern(string pattern) => new Regex("^" + Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".").Replace(@"\.\*", @"\*") + "$");
         public virtual void DumpAllFiles(bool keepOriginalPaths = true)
         {
-            foreach (var file in GetMem("/", "*", true))
+            foreach (var file in Get("/", "*", true))
             {
-                SetMem("/dump/" + file.Key, file.Value);
+                SetMem("/dump/" + file.Path, file.Bytes);
             }
         }
     }

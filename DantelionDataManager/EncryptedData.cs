@@ -474,6 +474,10 @@ namespace DantelionDataManager
         {
             return Files.Where(x => x.Value.Contains(relativePath)).Select(x => x.Key).FirstOrDefault();
         }
+        private bool ArchiveContains(string archive, string relativePath)
+        {
+            return Files[archive].Any(x => x.Equals(relativePath));
+        }
         private Memory<byte> GetFile(string data, string relativePath)
         {
             var startTime = Stopwatch.GetTimestamp();
@@ -510,42 +514,6 @@ namespace DantelionDataManager
                 return decryptedFileBytes;
             }
             return Array.Empty<byte>();
-        }
-        public override byte[] Get(string relativePath)
-        {
-            _log.LogInfo(this, _logid, "Loading file {f}", relativePath);
-            relativePath = CheckPath(relativePath);
-            string a = WhichArchive(relativePath);
-            if (string.IsNullOrEmpty(a))
-            {
-                return Array.Empty<byte>();
-            }
-            else return GetFile(a, relativePath).ToArray();
-        }
-        public override IEnumerable<KeyValuePair<string, byte[]>> Get(string relativePath, string pattern, bool load = true)
-        {
-            relativePath = CheckPath(relativePath);
-            Regex regex = PathPattern(pattern);
-            foreach (var data in WhichArchive(relativePath, regex))
-            {
-                _log.LogDebug(this, _logid, "Searching for file in subfolder {f} with pattern {p}, regex={r}", relativePath, pattern, regex.ToString());
-                var fs = GetMatchedFiles(relativePath, data, regex);
-                //_log.LogDebug(this, _logid, "Found {p} files matching in {d}", fs.Count, data);
-                foreach (var file in fs)
-                {
-                    if (load)
-                    {
-                        yield return new KeyValuePair<string, byte[]>(file, GetFile(data, file).ToArray());
-                        //bytes.Add(file, GetFile(data, file));
-                    }
-                    else
-                    {
-                        yield return new KeyValuePair<string, byte[]>(file, Array.Empty<byte>());
-                        //bytes.Add(file, Array.Empty<byte>());
-                    }
-                }
-            }
-            //return bytes;
         }
         private byte[] RetrieveFileFromBDTAsArray(long offset, long size, string data)
         {
@@ -596,7 +564,7 @@ namespace DantelionDataManager
             return false;
         }
 
-        public override Memory<byte> GetMem(string relativePath)
+        public override GameFile Get(string relativePath)
         {
             _log.LogInfo(this, _logid, "Loading file {f}", relativePath);
             relativePath = CheckPath(relativePath);
@@ -607,13 +575,13 @@ namespace DantelionDataManager
             string a = WhichArchive(relativePath);
             if (string.IsNullOrEmpty(a))
             {
-                return Array.Empty<byte>();
+                return new GameFile(relativePath, Memory<byte>.Empty);
             }
-            else return GetFile(a, relativePath);
+            else return new GameFile(relativePath, GetFile(a, relativePath));
             //return Get(relativePath);
         }
 
-        public override IEnumerable<KeyValuePair<string, Memory<byte>>> GetMem(string relativePath, string pattern, bool load = true)
+        public override IEnumerable<GameFile> Get(string relativePath, string pattern, bool load = true)
         {
             //Dictionary<string, Memory<byte>> bytes = new Dictionary<string, Memory<byte>>();
             relativePath = CheckPath(relativePath);
@@ -627,12 +595,12 @@ namespace DantelionDataManager
                 {
                     if (load)
                     {
-                        yield return new KeyValuePair<string, Memory<byte>>(file, GetFile(data, file));
+                        yield return new GameFile(file, GetFile(data, file));
                         //bytes.Add(file, GetFile(data, file));
                     }
                     else
                     {
-                        yield return new KeyValuePair<string, Memory<byte>>(file, Memory<byte>.Empty);
+                        yield return new GameFile(file, Memory<byte>.Empty);
                         //bytes.Add(file, Memory<byte>.Empty);
                     }
                 }

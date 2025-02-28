@@ -9,17 +9,6 @@ namespace DantelionDataManager
             _log.LogInfo(this, _logid, "Using Decrypted Data");
         }
 
-        public override byte[] Get(string relativePath)
-        {
-            string s = IOExtensions.ReadEither($"{RootPath}\\{relativePath}");
-            if (File.Exists(s))
-            {
-                _log.LogInfo(this, _logid, "Loading file {f}", relativePath);
-                return ReadBytes(s);
-            }
-            else return Array.Empty<byte>();
-        }
-
         private IEnumerable<string> GetFiles(string relativePath, string pattern, SearchOption option = SearchOption.AllDirectories)
         {
             _log.LogInfo(this, _logid, "Searching for file in subfolder {f} with pattern {p}", relativePath, pattern);
@@ -27,7 +16,7 @@ namespace DantelionDataManager
             return Directory.EnumerateFiles(z, pattern, option);
             //_log.LogInfo(this, _logid, "Found {p} files matching", fs.Length);
         }
-        protected override string CheckPath(string relativePath)
+        protected override string CheckPath(string relativePath, bool addDcx = true)
         {
             string t = relativePath.Trim().Replace('/', '\\');
             if (!t.StartsWith('\\'))
@@ -39,39 +28,23 @@ namespace DantelionDataManager
 
             return t;
         }
-        public override IEnumerable<KeyValuePair<string, byte[]>> Get(string relativePath, string pattern, bool load = true)
-        {
-            foreach (var f in GetFiles(relativePath, pattern))
-            {
-                _log.LogInfo(this, _logid, "Reading {f}", Path.GetFileName(f));
-                string s = f.Substring(RootPath.Length + 1);
-                if (load)
-                {
-                    yield return new KeyValuePair<string, byte[]>(s, ReadBytes(f));
-                }
-                else
-                {
-                    yield return new KeyValuePair<string, byte[]>(s, Array.Empty<byte>());
-                }
-            }
-        }
         public override bool Exists(string relativePath)
         {
             return File.Exists(IOExtensions.ReadEither(RootPath + "\\" + relativePath));
         }
 
-        public override Memory<byte> GetMem(string relativePath)
+        public override GameFile Get(string relativePath)
         {
             string s = IOExtensions.ReadEither(GetFullRootPath(relativePath));
             if (File.Exists(s))
             {
                 _log.LogInfo(this, _logid, "Loading file {f}", relativePath);
-                return ReadMemory(s);
+                return new GameFile(relativePath, ReadMemory(s));
             }
-            else return Memory<byte>.Empty;
+            else return new GameFile(relativePath, Memory<byte>.Empty);
         }
 
-        public override IEnumerable<KeyValuePair<string, Memory<byte>>> GetMem(string relativePath, string pattern, bool load = true)
+        public override IEnumerable<GameFile> Get(string relativePath, string pattern, bool load = true)
         {
             foreach (var f in GetFiles(relativePath, pattern))
             {
@@ -79,9 +52,9 @@ namespace DantelionDataManager
                 string s = $"{CheckPath(f[(RootPath.Length + 1)..])}";
                 if (load)
                 {
-                    yield return new KeyValuePair<string, Memory<byte>>(s, ReadMemory(f));
+                    yield return new GameFile(s, ReadMemory(f));
                 }
-                else yield return new KeyValuePair<string, Memory<byte>>(s, Memory<byte>.Empty);
+                else yield return new GameFile(s, Memory<byte>.Empty);
             }
         }
     }

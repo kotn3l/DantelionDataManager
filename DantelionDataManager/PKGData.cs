@@ -81,13 +81,14 @@ namespace DantelionDataManager
             _log.LogInfo(this, _logid, "Setup finished in {t}", Stopwatch.GetElapsedTime(startTime));
         }
 
-        protected override string CheckPath(string relativePath)
+        protected override string CheckPath(string relativePath, bool addDcx = true)
         {
+            relativePath = base.CheckPath(relativePath, addDcx);
             if (relativePath.StartsWith(_pkguroot))
             {
                 return relativePath;
             }
-            return _defaultRoot + base.CheckPath(relativePath);
+            return _defaultRoot + relativePath;
         }
 
         public override bool Exists(string relativePath)
@@ -95,12 +96,7 @@ namespace DantelionDataManager
             return _masterFiles.ContainsKey(relativePath);
         }
 
-        public override byte[] Get(string relativePath)
-        {
-            return GetFile(relativePath);
-        }
-
-        public override IEnumerable<KeyValuePair<string, byte[]>> Get(string relativePath, string pattern, bool load = true)
+        public override IEnumerable<GameFile> Get(string relativePath, string pattern, bool load = true)
         {
             var regex = GetMemSetup(ref relativePath, pattern);
             foreach (var item in GetMatchedFiles(relativePath, regex))
@@ -108,27 +104,11 @@ namespace DantelionDataManager
                 string s = item.FullName[_defaultRoot.Length..];
                 if (load)
                 {
-                    yield return new KeyValuePair<string, byte[]>(s, GetFile(item.FullName));
+                    yield return new GameFile(s, GetFile(item.FullName));
                 }
                 else
                 {
-                    yield return new KeyValuePair<string, byte[]>(s, Array.Empty<byte>());
-                }
-            }
-        }
-        public override IEnumerable<KeyValuePair<string, Memory<byte>>> GetMem(string relativePath, string pattern, bool load = true)
-        {
-            var regex = GetMemSetup(ref relativePath, pattern);
-            foreach (var item in GetMatchedFiles(relativePath, regex))
-            {
-                string s = item.FullName[_defaultRoot.Length..];
-                if (load)
-                {
-                    yield return new KeyValuePair<string, Memory<byte>>(s, GetFile(item.FullName));
-                }
-                else
-                {
-                    yield return new KeyValuePair<string, Memory<byte>>(s, Memory<byte>.Empty);
+                    yield return new GameFile(s, Memory<byte>.Empty);
                 }
             }
         }
@@ -159,10 +139,19 @@ namespace DantelionDataManager
             }
         }
 
-        public override Memory<byte> GetMem(string relativePath)
+        public override GameFile Get(string relativePath)
         {
             var bytes = GetFile(relativePath);
-            return new Memory<byte>(bytes);
+            return new GameFile(relativePath, bytes);
+        }
+
+        public override byte[] GetRegulation(string rootPath)
+        {
+            if (rootPath == RootPath)
+            {
+                return GetFile("/regulation.bin");
+            }
+            else return base.GetRegulation(rootPath);
         }
 
         private IEnumerable<PfsReader.File> GetMatchedFiles(string relativePath, Regex regex)
@@ -177,6 +166,11 @@ namespace DantelionDataManager
             _log.LogDebug(this, _logid, "Searching for file {f}", relativePath);
 
             var f = _masterFiles.Values.FirstOrDefault(x => x.FullName.Equals(fullpath, StringComparison.InvariantCultureIgnoreCase));
+            if (f == null)
+            {
+                fullpath = CheckPath(relativePath, false);
+                f = _masterFiles.Values.FirstOrDefault(x => x.FullName.Equals(fullpath, StringComparison.InvariantCultureIgnoreCase));
+            }
             if (f != null)
             {
                 _log.LogDebug(this, $"PKG:{f.offset}", "Found {f} matching, size={s}", f.FullName, f.size);

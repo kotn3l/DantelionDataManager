@@ -58,69 +58,85 @@ var darkSouls3PkgData = GameData.InitGameData_PKG(@"D:\DarkSouls3.pkg", @"D:\out
 We will use the example games from the Initialization section.
 
 ### Reading data
-Mainly there are two overloads for two different methods reading files: `Get(..)` for `byte[]` and `GetMem(..)` for `Memory<byte>`.
+There are two (well, four) overloads for reading files:
+* Read one specific file: `Get(relativePath)`
+* Read multiple files by a provided pattern: `Get(relativePath, pattern, bool load = true)`
+
+A `GameFile` is returned, which contains the `Path`, `Bytes` and `Data` of the file. `Data` is a `ISoulsFile`, which can be parsed automatically if you pass the correct delegate to the remaining two overloads:
+* `Get(relativePath, Func<Memory<byte>, ISoulsFile> load)`
+* `Get(relativePath, pattern, Func<Memory<byte>, ISoulsFile> load)`
+
+It will make more sense with the examples just below.
+
 #### Reading one file
 
-Below is an example at their first overload, which takes the `relativePath` for the file you want to read. The returned bytes can be used simply with SoulsFormats. **If a file doesn't exist, it returns empty data (not null).**
+The first overload takes a `relativePath` parameter. The returned file's bytes can be used simply with SoulsFormats. **If a file doesn't exist, it returns empty bytes! (not null).**
 
 ```cs
-var bndBytes = eldenRingData.Get("/chr/c2120.chrbnd.dcx");
-var msbMemory = darkSouls3Data.GetMem("/map/mapstudio/m10_00_00.msb.dcx");
-var paramMemory = bloodbornePkgData.GetMem("/param/gameparam/gameparam.parambnd.dcx");
+var bndFile = eldenRingData.Get("/chr/c2120.chrbnd.dcx");
+var malenia = BND4.Read(bndFile.Bytes);
+//any modification you do to 'malenia' will not be reflected back on the Data property of 'bndFile' obviously
 
-var malenia = BND4.Read(bndBytes);
+var paramBnd = bloodbornePkgData.Get("/param/gameparam/gameparam.parambnd.dcx", BND4.Read);
+//this way the BND4.Read function is called automatically, and the 'Data' property is filled
+//unfortunately paramBnd.Data will have to be cast as BND4 if you want to work with it
 ```
 
 #### Reading multiple files
 
-The second overload takes a `relativePath`, `pattern` and an optional bool `load` parameter. The return value is a `KeyValuePair` collection, with the `Key` being the (relative) file path, and `Value` being the actual file data -- if the `load` parameter is false, the file data won't be loaded aka it will be empty. **Only existing files will be present in the collection.**
+The second overload takes a `relativePath`, `pattern` and an optional bool `load` parameter. The return value is an enumerable `GameFile` collection -- if the `load` parameter is false, the file bytes won't be loaded, they will be empty. (This can be useful if you want to check what files are actually present by a pattern for example.) **Only existing files will be present in the collection.**
 
 The `pattern` parameter works similarly on how you would search in Windows file explorer.
 
-Let's take a look on how to use this to get all `.msb` files for the Overworld in Elden Ring (`m60`).
-
+Let's take a look on how to use this to get all chrbnds:
 ```cs
-var allMsbs = eldenRingData.GetMem("/map/mapstudio", "m60*.msb*", true);
-foreach (var pair in allMsbs)
+var allChrs = darkSouls3PkgData.Get("/chr", "*chrbnd.dcx", true);
+foreach (var gamefile in allChrs)
 {
-    var msb = MSBE.Read(pair.Value);
+    var chr = BND4.Read(gamefile.Bytes);
 }
 ```
 
-Another example for loading all chrbnds:
+Another example to load all `.msb` files for the Overworld in Elden Ring (`m60`).
+
 ```cs
-var allChrs = darkSouls3PkgData.GetMem("/chr", "*chrbnd.dcx", true);
-foreach (var pair in allChrs)
+var allMsbs = eldenRingData.Get("/map/mapstudio", "m60*.msb*", MSBE.Read);
+foreach (var gamefile in allMsbs)
 {
-    var chr = BND4.Read(pair.Value);
+    //do something to MSBE through gamefile.Data
 }
 ```
 
 ### Writing data
 
-Similarly like the methods for reading, there's also (only) two methods for writing files: `Set(..)` and `SetMem(..)`. You guessed it, they take a `relativePath` parameter, and either a `byte[]` or `Memory<byte>` data. These methods will always output into the `outPath` folder set earlier in the Initialization section.
+There's (only) two methods for writing files: `Set(..)` and `SetMem(..)`. You guessed it, they take a `relativePath` parameter, and either a `byte[]` or `Memory<byte>` data this time around. These methods will always output into the `outPath` folder set earlier in the Initialization section.
 ```cs
-var bndBytes = eldenRingData.Get("/chr/c2120.chrbnd.dcx");
-var malenia = BND4.Read(bndBytes);
+var bndFile = eldenRingData.Get("/chr/c2120.chrbnd.dcx");
+var malenia = BND4.Read(bndFile.Bytes);
 
 //do something to malenia bnd
 
-eldenRingData.Set("/chr/c2120.chrbnd.dcx", malenia.Write());
+//then to write file:
+eldenRingData.Set(bndFile.Path, malenia.Write());
+eldenRingData.SetMem("/chr/c2120.chrbnd.dcx", malenia.Write());
 //you can set the relativePath to anything.
-//in this case our output file full path will be: "D:\outputfolder\chr\c2120.chrbnd.dcx"
+//in both these cases our output file's full path will be: "D:\outputfolder\chr\c2120.chrbnd.dcx"
+
+//OR use the write method available through the 'bndFile' instance, only if you passed a delegate to fill the 'Data' property
+//for the simplicity of this example I will set it by hand, which is allowed.
+//This following line is NOT needed if you pass the delegate. (like in the next example)
+bndFile.Data = malenia;
+bndFile.Write(eldenRingData);
 ```
 
 Example with writing multiple files:
 ```cs
-var allMsbs = eldenRingData.GetMem("/map/mapstudio", "m60*.msb*", true);
-foreach (var pair in allMsbs)
+var allMsbs = eldenRingData.Get("/map/mapstudio", "m60*.msb*", MSBE.Read);
+foreach (var msb in allMsbs)
 {
-    var msb = MSBE.Read(pair.Value);
-
-    //do something to msb
-
-    eldenRingData.SetMem(pair.Key, msb.Write());
-    //we can use the Key here as it is the relative path of the file
+    //do something to msb through 'msb.Data'
+    //then simply
+    msb.Write(eldenRingData);
 }
 ```
 

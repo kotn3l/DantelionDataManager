@@ -21,7 +21,9 @@ Implementing other games only needs adding a files dictionary, and a keys file. 
 ## Notable features
 ### Automatic decrypting and BHDCache for fast re-runs (EncryptedData)
 
-When first running the code, all bhds must be decrypted by using the keys in the working *Data* folder -- these are saved along with an MD5 hash as a `.bhdcache` file. On next runs if the cache file is valid, those are used instead for super fast startups. If invalid, they're deleted and automatically recalculated.
+When first running the code, all bhds must be decrypted by using the keys in the working *Data* folder -- if not present, it will try locating the game exe and dump them. THen, the keys are saved with an MD5 hash as a `.bhdcache` file.
+
+On future runs if the cache file is valid, those are used instead for super fast startups. If invalid, they're deleted and automatically recalculated.
 
 The retrieved files from the bdts are also automatically decrypted.
 

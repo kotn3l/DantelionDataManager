@@ -11,7 +11,7 @@ namespace DantelionDataManager
 {
     public abstract class GameData
     {
-        protected static readonly HashSet<string>_nonCompressedExceptions = ["hks", "bdt", "bhd", "bin", "plt", "prx", "dat", "sha", "dds", "png", "sfo", "xml", "sig", "info", "sprx" ];
+        protected static readonly HashSet<string> _neverCompressed = ["hks", "bdt", "bhd", "bin", "plt", "prx", "dat", "sha", "dds", "png", "sfo", "xml", "sig", "info", "sprx" ];
         //protected readonly ADantelionGame _game;
         public readonly string RootPath;
         public readonly string OutPath;
@@ -35,11 +35,11 @@ namespace DantelionDataManager
             {
                 if (isModern)
                 {
-                    return new ModernEncryptedData(arch, rootPath, outPath, BHDgame, keys, logId);
+                    return new ModernEncryptedData(rootPath, outPath, BHDgame, arch, keys, logId);
                 }
                 else
                 {
-                    return new EncryptedData(arch, rootPath, outPath, BHDgame, keys, logId);
+                    return new EncryptedData(rootPath, outPath, BHDgame, arch, keys, logId);
                 }
             }
         }
@@ -54,19 +54,19 @@ namespace DantelionDataManager
         }
         public static EncryptedData InitGameData_PreEldenRing(string rootPath, string outPath, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA")
         {
-            return new EncryptedData(Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), rootPath, outPath, BHDgame, keys, logId);
+            return new EncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), keys, logId);
         }
         public static EncryptedData InitGameData_PostEldenRing(string rootPath, string outPath, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA")
         {
-            return new ModernEncryptedData(Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), rootPath, outPath, BHDgame,  keys, logId);
+            return new ModernEncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), keys, logId);
         }
         public static EncryptedData InitGameData_PreEldenRing(string rootPath, string outPath, BHD5.Game BHDgame = BHD5.Game.DarkSouls3, string logId = "DATA")
         {
-            return new EncryptedData(Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), rootPath, outPath, BHDgame, logId);
+            return new EncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), null, logId);
         }
         public static EncryptedData InitGameData_PostEldenRing(string rootPath, string outPath, BHD5.Game BHDgame = BHD5.Game.EldenRing, string logId = "DATA")
         {
-            return new ModernEncryptedData(Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), rootPath, outPath, BHDgame, logId);
+            return new ModernEncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), null, logId);
         }
 
         public GameData(string rootPath, string outPath, string logId)
@@ -122,7 +122,6 @@ namespace DantelionDataManager
                 yield return gf;
             }
         }
-
         public string Set(string relativePath, byte[] data)
         {
             return data.WriteBytes(SetSetup(relativePath));
@@ -182,7 +181,7 @@ namespace DantelionDataManager
         protected virtual string CheckPath(string relativePath, bool addDcx = true)
         {
             string t = relativePath.Trim().Replace('\\', '/').ToLowerInvariant();
-            if (!t.EndsWith(".dcx") && t.Split('.').Length > 1 && !_nonCompressedExceptions.Any(t.EndsWith) && !string.IsNullOrWhiteSpace(IOExtensions.GetFileExtensions(t)) && addDcx)
+            if (!t.EndsWith(".dcx") && t.Split('.').Length > 1 && !_neverCompressed.Any(t.EndsWith) && !string.IsNullOrWhiteSpace(IOExtensions.GetFileExtensions(t)) && addDcx)
             {
                 t += ".dcx";
             }
@@ -195,7 +194,7 @@ namespace DantelionDataManager
 
             return t;
         }
-        protected static Regex PathPattern(string pattern) => new Regex("^" + Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".").Replace(@"\.\*", @"\*") + "$");
+        public static Regex PathPattern(string pattern) => new Regex("^" + Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".").Replace(@"\.\*", @"\*") + "$");
         public virtual void DumpAllFiles(bool keepOriginalPaths = true)
         {
             foreach (var file in Get("/", "*", true))

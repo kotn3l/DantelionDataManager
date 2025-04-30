@@ -1,7 +1,6 @@
 ﻿using DantelionDataManager.Extensions;
 using DantelionDataManager.Log;
 using DotNext.IO.MemoryMappedFiles;
-using LibOrbisPkg.Util;
 using SoulsFormats;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -18,21 +17,26 @@ namespace DantelionDataManager
 {
     public class EncryptedData : GameData, IDisposable
     {
+        private const string DEFAULT_KEY = "default";
+
         private readonly Dictionary<string, BHD5> _master;
         private readonly Aes _AES;
         private readonly string _relativeCacheDir;
         private readonly string _absoluteCacheDir;
+        private readonly string _keysFile;
+        private readonly string _dictionaryFile;
 
         public readonly Dictionary<string, string> Keys;
         public readonly Dictionary<string, HashSet<string>> Files;
         public readonly BHD5.Game Id;
 
-        private EncryptedData(string root, string outP, BHD5.Game BHDgame, string logId = "DATA") : base(root, outP, logId)
+        public EncryptedData(string root, string outP, BHD5.Game BHDgame, string[] bhdPaths = null, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, logId)
         {
             _log.LogInfo(this, _logid, "Using Encrypted Data");
             _master = new Dictionary<string, BHD5>();
             Files = new Dictionary<string, HashSet<string>>();
-            this.Id = BHDgame;
+            Keys = keys;
+            Id = BHDgame;
 
             _AES = Aes.Create();
             _AES.Mode = CipherMode.ECB;
@@ -41,95 +45,165 @@ namespace DantelionDataManager
 
             _relativeCacheDir = $@"Data\{Id}\.cache";
             _absoluteCacheDir = Path.Combine(AssemblyLocation, _relativeCacheDir);
+            _keysFile = Path.Combine(AssemblyLocation, $@"Data\{Id}\keys");
+            _dictionaryFile = Path.Combine(AssemblyLocation, $@"Data\{Id}\{Id}.txt");
             IOExtensions.CheckDir(_absoluteCacheDir);
-        }
-        private EncryptedData(string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA") : this(root, outP, BHDgame, logId)
-        {
-            Keys = keys;
-            InitKeys();
-        }
-        public EncryptedData(string[] bhdPaths, string root, string outP, BHD5.Game BHDgame, string logId = "DATA") : this(root, outP, BHDgame, logId)
-        {
-            Keys = new Dictionary<string, string>();
 
-            ReadKeys();
-            InitKeys();
-            Init(bhdPaths);
-
-        }
-        public EncryptedData(string[] bhdPaths, string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA") : this(root, outP, BHDgame, keys, logId)
-        {
-            Init(bhdPaths);
-        }
-
-        private void ReadKeys()
-        {
-            string path = Path.Combine(AssemblyLocation, $@"Data\{Id}\keys");
-            if (!File.Exists(path))
+            bhdPaths ??= Directory.GetFiles(RootPath, "*.bhd", SearchOption.AllDirectories);
+            if (bhdPaths.Length < 1)
             {
-                _log.LogWarning(this, _logid, "No game keys found at {p}", path);
-                return;
+                throw new Exception("Can't find any BHDs!");
             }
 
-            using (StreamReader sr = new StreamReader(path))
+            Keys = null;
+
+            InitDictionary(bhdPaths);
+            Keys ??= ReadKeys();
+            InitArchives(bhdPaths);
+        }
+
+        private Dictionary<string, string> ReadKeys()
+        {
+            if (!File.Exists(_keysFile))
+            {
+                _log.LogWarning(this, _logid, "No game keys found at {p} -- trying to get keys from game exe.", _keysFile);
+                var keys = ReadKeysFromExe();
+                WriteKeysFile(keys);
+                return keys;
+            }
+
+            var fkeys = new Dictionary<string, string>();
+            using (StreamReader sr = new StreamReader(_keysFile))
             {
                 string line = sr.ReadLine();
                 while (line != null)
                 {
-                    while (line == "" || line[0] != '#')
+                    while (line == string.Empty || line[0] != '#')
                     {
                         line = sr.ReadLine();
                     }
                     string k = line[1..].ToLowerInvariant();
-                    Keys.Add(k, string.Empty);
+                    fkeys.Add(k, string.Empty);
                     var sb = new StringBuilder();
-                    while ((line = sr.ReadLine()) != null && line != "" && line[0] != '#')
+                    while ((line = sr.ReadLine()) != null && line != string.Empty && line[0] != '#')
                     {
                         sb.AppendLine(line);
-                        ;
-                        //Keys[k].Add(line.Trim());
                     }
-                    Keys[k] = sb.ToString();
+                    fkeys[k] = sb.ToString();
                 }
             }
-        }
 
-        private void InitKeys()
+            return fkeys;
+        }
+        private Dictionary<string, string> ReadKeysFromExe()
         {
-            foreach (var k in Keys.Keys)
+            string gameExe = $"{RootPath}\\{Id.ToString().ToLower()}.exe";
+            if (!File.Exists(gameExe))
             {
-                _master.Add(k, new BHD5(Id));
-                Files.Add(k, new HashSet<string>());
+                throw new Exception("Exe not found!!");
+                foreach (var item in Directory.EnumerateFiles(RootPath, "*.exe", SearchOption.TopDirectoryOnly))
+                {
+                    //setup exe-finding logic
+                    ;
+                }
+            }
+
+            byte?[] pattern = [
+                /*0x73, 0x00, 0x79, 0x00, 0x73, 0x00, 0x74, 0x00, 0x65, 0x00, 0x6D, 0x00,
+                0x3A, 0x00, 0x2F, 0x00, null, 0x00, null, 0x00, null, 0x00, null, 0x00,
+                null, 0x00, null, 0x00, null, 0x00, null, 0x00, null, 0x00, null, 0x00,
+                null, 0x00, null, 0x00, null, 0x00, null, 0x00, null, 0x00, null, 0x00,*/
+                0x2D, 0x2D, 0x2D, 0x2D, 0x2D, 0x42, 0x45, 0x47, 0x49, 0x4E, 0x20, 0x52,
+                0x53, 0x41, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x4B, 0x45,
+                0x59, 0x2D, 0x2D, 0x2D, 0x2D, 0x2D
+            ]; //s.y.s.t.e.m.:./.??.??.??.??.??.??.??.??.??.??.??.??.??.??.??.??.-----BEGIN RSA PUBLIC KEY-----
+            var ekeys = new Dictionary<string, string>();
+
+            using var f = MemoryMappedFile.CreateFromFile(gameExe, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
+            using var mem = f.CreateMemoryAccessor(0, 0, MemoryMappedFileAccess.Read);
+            for (int i = 0; i <= mem.Span.Length - pattern.Length; i++)
+            {
+                bool match = true;
+                for (int j = 0; j < pattern.Length; j++)
+                {
+                    if (mem.Span[i + j] != pattern[j].Value) //pattern[j].HasValue && 
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match)
+                {
+                    //need to backtrack 64 bytes to get bhd name
+                    //i think bhd name can only be 8 in length (16 bytes in null terminated string)
+                    var name = ASCIIEncoding.ASCII.GetString(mem.Span.Slice(i - 64, 16)).Replace("\0", string.Empty);
+                    var key = ASCIIEncoding.ASCII.GetString(mem.Span.Slice(i, 27 * 16)).Replace("\0", string.Empty)[..^1];
+                    if (!key.EndsWith("-----END RSA PUBLIC KEY-----")) //beginning is already checked by the pattern
+                    {
+                        throw new Exception("RSA KEY is wrong!");
+                    }
+
+                    //if theres additional archives, theres one more generic key
+                    //its the last one always so we store it as the remaining archives' keys
+                    //and break the loop
+                    if (name[..4] != "data")
+                    {
+                        foreach (var missed in _master.Keys.Where(x => !ekeys.ContainsKey(x)))
+                        {
+                            ekeys.Add(missed, key);
+                        }
+                        break;
+                    }
+                    ekeys.Add(name, key);
+                }
+            }
+            return ekeys;
+        }
+        private void WriteKeysFile(Dictionary<string, string> keys)
+        {
+            using var sw = new StreamWriter(_keysFile);
+            foreach (var kvp in keys)
+            {
+                sw.WriteLine($"#{kvp.Key}");
+                sw.WriteLine(kvp.Value);
+            }
+        }
+        private void InitDictionary(string[] bhdPaths)
+        {
+            foreach (var f in bhdPaths)
+            {
+                string data = GetBHDArchive(f).ToLowerInvariant();
+                _master.Add(data, null);
+                Files.Add(data, new HashSet<string>());
             }
 
             //ReadFileDictionaries();
             ReadFileDictionaryCombined();
             //SaveFileDictionaries();
         }
-
-        private void Init(string[] bhdPaths)
+        private void InitArchives(string[] bhdPaths)
         {
-            //int i = 0;
             var startTime = Stopwatch.GetTimestamp();
-            //_threads = new Task[files.Length];
-            //foreach (var f in bhdPaths)
             Parallel.ForEach(bhdPaths, f =>
             {
-                string data = GetEncryptedFiles(f).ToLowerInvariant();
+                string data = GetBHDArchive(f).ToLowerInvariant();
                 if (Keys.ContainsKey(data))
                 {
                     InitData(f, data);
-                    //_threads[i] = Task.Run(() => Init(f, data));
                     _log.LogInfo(this, _logid, "Starting thread {t}", data);
-                    //i++;
                 }
+                /*else if (Keys.ContainsKey(DEFAULT_KEY))
+                {
+                    InitData(f, data, DEFAULT_KEY);
+                    _log.LogInfo(this, _logid, "Starting thread {t} with default key", f);
+                }*/
                 else
                 {
+                    _master[data] = new BHD5(Id);
                     _log.LogWarning(this, _logid, "The BHD key for {d} was not found!", data);
                 }
             }
             );
-            //Task.WaitAll(_threads);
             _log.LogInfo(this, _logid, "All threads finished in {t}ms", Stopwatch.GetElapsedTime(startTime).TotalMilliseconds);
             //DictionaryFileCoverage();
             //VerifyFilesInArchive();
@@ -162,13 +236,12 @@ namespace DantelionDataManager
         }
         private void ReadFileDictionaryCombined()
         {
-            string path = Path.Combine(AssemblyLocation, $@"Data\{Id}\{Id}.txt");
-            if (!File.Exists(path))
+            if (!File.Exists(_dictionaryFile))
             {
-                _log.LogWarning(this, _logid, "No game dictionary found at {p}", path);
+                _log.LogWarning(this, _logid, "No game dictionary found at {p}", _dictionaryFile);
                 return;
             }
-            using (StreamReader sr = new StreamReader(path))
+            using (StreamReader sr = new StreamReader(_dictionaryFile))
             {
                 string line = sr.ReadLine();
                 while (line != null)
@@ -439,7 +512,7 @@ namespace DantelionDataManager
             }
         }
 
-        private string GetEncryptedFiles(string file)
+        private string GetBHDArchive(string file)
         {
             return file.Substring(RootPath.Length + 1).Split('.')[0];
         }
@@ -621,11 +694,7 @@ namespace DantelionDataManager
     }
     public class ModernEncryptedData : EncryptedData
     {
-        public ModernEncryptedData(string[] files, string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA") : base(files, root, outP, BHDgame, keys, logId)
-        {
-            _log.LogInfo(this, _logid, "Using ER Encrypted Data");
-        }
-        public ModernEncryptedData(string[] files, string root, string outP, BHD5.Game BHDgame, string logId = "DATA") : base(files, root, outP, BHDgame, logId)
+        public ModernEncryptedData(string root, string outP, BHD5.Game BHDgame, string[] bhdPaths = null, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, BHDgame, bhdPaths, keys, logId)
         {
             _log.LogInfo(this, _logid, "Using ER Encrypted Data");
         }

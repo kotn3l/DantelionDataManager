@@ -55,8 +55,6 @@ namespace DantelionDataManager
                 throw new Exception("Can't find any BHDs!");
             }
 
-            Keys = null;
-
             InitDictionary(bhdPaths);
             Keys ??= ReadKeys();
             InitArchives(bhdPaths);

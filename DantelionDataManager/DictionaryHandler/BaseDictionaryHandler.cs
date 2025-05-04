@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace DantelionDataManager.DictionaryHandler
 {
-    public abstract class BaseDictionaryHandler
+    public abstract class BaseDictionaryHandler : IDisposable
     {
         protected readonly Dictionary<string, BHD5> _master;
         protected readonly IFileHash _hashCalc;
@@ -20,5 +20,8 @@ namespace DantelionDataManager.DictionaryHandler
         public abstract string WhichArchive(string relativePath);
         public abstract bool Exists(string relativePath);
         public abstract IEnumerable<string> GetMatchedFiles(string relativePath, string data, Regex regex);
+        public virtual void Dispose()
+        {
+        }
     }
 }

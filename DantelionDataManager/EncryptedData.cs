@@ -18,8 +18,6 @@ namespace DantelionDataManager
 {
     public class EncryptedData : GameData, IDisposable
     {
-        private const string DEFAULT_KEY = "default";
-
         private readonly Dictionary<string, BHD5> _master;
         private readonly Aes _AES;
         private readonly string _relativeCacheDir;
@@ -67,7 +65,7 @@ namespace DantelionDataManager
 
         }
 
-        protected virtual IFileHash? GetHashingAlgo()
+        protected virtual IFileHash GetHashingAlgo()
         {
             return new OldFileHash();
         }
@@ -223,7 +221,7 @@ namespace DantelionDataManager
             if (!File.Exists(_dictionaryFile))
             {
                 _log.LogWarning(this, _logid, "No game dictionary found at {p}", _dictionaryFile);
-                Handler = new PreDictionaryHandler(_genericDictionaryFile, _master, _hash);
+                Handler = new PreDictionaryHandler(_genericDictionaryFile, _dictionaryFile, _master, _hash);
                 return;
             }
             Handler = new FileDictionaryHandler(_dictionaryFile, _master, _hash);
@@ -621,6 +619,7 @@ namespace DantelionDataManager
 
         public void Dispose()
         {
+            Handler.Dispose();
             _AES.Dispose();
             GC.SuppressFinalize(this);
         }
@@ -632,7 +631,7 @@ namespace DantelionDataManager
             _log.LogInfo(this, _logid, "Using ER Encrypted Data");
         }
 
-        protected override IFileHash? GetHashingAlgo()
+        protected override IFileHash GetHashingAlgo()
         {
             return new NewFileHash();
         }

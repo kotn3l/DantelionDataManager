@@ -4,9 +4,10 @@ namespace DantelionDataManager.DictionaryHandler
 {
     public class PreDictionaryHandler : FileDictionaryHandler
     {
-        public PreDictionaryHandler(string genericPath, Dictionary<string, BHD5> master, IFileHash hashCalc) : base(genericPath, master, hashCalc)
+        private readonly string _dictPath; 
+        public PreDictionaryHandler(string genericPath, string dictPath, Dictionary<string, BHD5> master, IFileHash hashCalc) : base(genericPath, master, hashCalc)
         {
-
+            _dictPath = dictPath;
         }
 
         protected override void ReadFileDictionaryCombined(string dictPath)
@@ -52,6 +53,21 @@ namespace DantelionDataManager.DictionaryHandler
                 return string.Empty;
             }
             return d;
+        }
+
+        public override void Dispose()
+        {
+            using (var sw = new StreamWriter(_dictPath))
+            {
+                foreach (var kvp in FileDictionary)
+                {
+                    sw.WriteLine($"#{kvp.Key}");
+                    foreach (var line in kvp.Value)
+                    {
+                        sw.WriteLine(line);
+                    }
+                }
+            }
         }
     }
 }

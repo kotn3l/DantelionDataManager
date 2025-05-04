@@ -4,13 +4,13 @@ A .NET library for managing (reading and writing) game files of **FromSoftware g
 * encrypted (packed) data [^1] [^3]
 * decryped (unpacked) data
 
-In terms of EncrypedData, **it currently only supports:**
+In terms of EncrypedData, **it currently supports:**
 * Dark Souls 3
 * Sekiro
 * Elden Ring
 * Armored Core VI
 
-Implementing other games only needs adding a files dictionary, and a keys file. This library is intended for tool developers.
+Other games might be supported, but tool functionality is limited without a file dictionary. This library is intended for tool developers.
 
 <sub>**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT (PS4 and PS5), Elden Ring v1.0 (PS4 and PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.</sub>
 
@@ -21,11 +21,15 @@ Implementing other games only needs adding a files dictionary, and a keys file. 
 ## Notable features
 ### Automatic decrypting and BHDCache for fast re-runs (EncryptedData)
 
-When first running the code, all bhds must be decrypted by using the keys in the working *Data* folder -- if not present, it will try locating the game exe and dump them. THen, the keys are saved with an MD5 hash as a `.bhdcache` file.
+When first running the code, all bhds will be decrypted using the keys in the working *Data* folder.* Then, the decrypted bhds are saved with an MD5 hash as a `.bhdcache` file.
 
-On future runs if the cache file is valid, those are used instead for super fast startups. If invalid, they're deleted and automatically recalculated.
+On future runs if the cache file is valid, those are used instead for super fast startups. (If invalid, they're deleted and automatically decrypted again.)
 
-The retrieved files from the bdts are also automatically decrypted.
+The retrieved files from the bdts are also automatically decrypted when needed.
+
+#### *Unsupported games (missing keys / file dictionary)
+
+The code will attempt to read the archive keys from the game exe, and dump them. However without a file dictionary, loading files by a path pattern is not viable. If a file explicitly input by the user does exist, it is saved into a makeshift dictionary, and dumped upon application shutdown into the working *Data* directory.
 
 ### Patch "loading" (PKGData)
 Supports loading patches for PKGs. This simply means that for files that exist in the patch will be read from there (instead of the main pkg). 

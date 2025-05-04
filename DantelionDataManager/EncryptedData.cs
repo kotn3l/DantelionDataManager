@@ -1,4 +1,4 @@
-﻿using DantelionDataManager.DictionaryManager;
+﻿using DantelionDataManager.DictionaryHandler;
 using DantelionDataManager.Extensions;
 using DantelionDataManager.Log;
 using DotNext.IO.MemoryMappedFiles;
@@ -30,8 +30,7 @@ namespace DantelionDataManager
         protected IFileHash _hash;
 
         public readonly Dictionary<string, string> Keys;
-        //public readonly Dictionary<string, HashSet<string>> FileDictionary;
-        private BaseDictionaryManager Manager;
+        private BaseDictionaryHandler Handler;
         public readonly BHD5.Game Id;
 
         public EncryptedData(string root, string outP, BHD5.Game BHDgame, string[] bhdPaths = null, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, logId)
@@ -224,11 +223,11 @@ namespace DantelionDataManager
             if (!File.Exists(_dictionaryFile))
             {
                 _log.LogWarning(this, _logid, "No game dictionary found at {p}", _dictionaryFile);
-                Manager = new PreDictionaryManager(_genericDictionaryFile, _master, _hash);
+                Handler = new PreDictionaryHandler(_genericDictionaryFile, _master, _hash);
                 return;
             }
-            Manager = new FileDictionaryManager(_dictionaryFile, _master, _hash);
-            _log.LogInfo(this, _logid, "{n} filenames read", Manager.FileDictionary.Sum(x => x.Value.Count));
+            Handler = new FileDictionaryHandler(_dictionaryFile, _master, _hash);
+            _log.LogInfo(this, _logid, "{n} filenames read", Handler.FileDictionary.Sum(x => x.Value.Count));
 
             VerifyFilesPerArchive();
         }
@@ -250,7 +249,7 @@ namespace DantelionDataManager
         }
         private void SaveFileDictionaries()
         {
-            foreach (var filess in Manager.FileDictionary)
+            foreach (var filess in Handler.FileDictionary)
             {
                 using StreamWriter sw = new StreamWriter(Path.Combine(AssemblyLocation, $@"Data\{Id}\{filess.Key.Split('\\')[0]}.txt"));
                 foreach (var kvp in filess.Value.OrderBy(x => x))
@@ -277,7 +276,7 @@ namespace DantelionDataManager
             Dictionary<ulong, string> lowerFiles;
             if (addCurrent)
             {
-                foreach (var item in Manager.FileDictionary.SelectMany(x => x.Value))
+                foreach (var item in Handler.FileDictionary.SelectMany(x => x.Value))
                 {
                     files.Add(item);
                 }
@@ -326,7 +325,7 @@ namespace DantelionDataManager
         }
         public void SetUnknownFiles()
         {
-            HashSet<string> files = new HashSet<string>(Manager.FileDictionary.SelectMany(x => x.Value));
+            HashSet<string> files = new HashSet<string>(Handler.FileDictionary.SelectMany(x => x.Value));
             Dictionary<ulong, string> lowerFiles = files.Select(f => f.ToLowerInvariant()).ToHashSet().ToDictionary(_hash.GetFilePathHash, x => x);
             HashSet<string> guessed = new HashSet<string>();
             foreach (var kvp in _master)
@@ -415,14 +414,14 @@ namespace DantelionDataManager
         }
         private void DictionaryFileCoverage()
         {
-            int sumDict = Manager.FileDictionary.Sum(x => x.Value.Count);
+            int sumDict = Handler.FileDictionary.Sum(x => x.Value.Count);
             int sumGame = _master.Sum(x => x.Value.Buckets.Sum(y => y.Count));
             _log.LogDebug(this, _logid, "Dictionary files: {n} vs Master files: {m} ({p}% covered)", sumDict, sumGame, Math.Round((sumDict / (float)sumGame) * 100, 2));
         }
         private void VerifyFilesInArchive()
         {
-            int sumDict = Manager.FileDictionary.Sum(x => x.Value.Count);
-            var list = Manager.FileDictionary.Values.SelectMany(list => list).ToArray();
+            int sumDict = Handler.FileDictionary.Sum(x => x.Value.Count);
+            var list = Handler.FileDictionary.Values.SelectMany(list => list).ToArray();
             var hashes = new ulong[sumDict];
             Parallel.For(0, sumDict, i =>
                 {
@@ -438,7 +437,7 @@ namespace DantelionDataManager
             var dict = new Dictionary<string, HashSet<ulong>>();
             var hashes = new Dictionary<string, HashSet<ulong>>();
 
-            foreach (var item in Manager.FileDictionary)
+            foreach (var item in Handler.FileDictionary)
             {
                 if (item.Value.Count < 1)
                 {
@@ -568,7 +567,7 @@ namespace DantelionDataManager
 
         public override bool Exists(string relativePath)
         {
-            return Manager.Exists(CheckPath(relativePath));
+            return Handler.Exists(CheckPath(relativePath));
         }
 
         public override GameFile Get(string relativePath)
@@ -579,7 +578,7 @@ namespace DantelionDataManager
             {
                 return value;
             }*/
-            string a = Manager.WhichArchive(relativePath);
+            string a = Handler.WhichArchive(relativePath);
             if (string.IsNullOrEmpty(a))
             {
                 return new GameFile(relativePath, Memory<byte>.Empty);
@@ -593,7 +592,7 @@ namespace DantelionDataManager
             //Dictionary<string, Memory<byte>> bytes = new Dictionary<string, Memory<byte>>();
             relativePath = CheckPath(relativePath);
             Regex regex = PathPattern(pattern);
-            foreach (var data in Manager.WhichArchive(relativePath, regex))
+            foreach (var data in Handler.WhichArchive(relativePath, regex))
             {
                 _log.LogInfo(this, _logid, "Searching for file in subfolder {f} with pattern {p}, regex={r}", relativePath, pattern, regex.ToString());
                 var fs = GetMatchedFiles(relativePath, data, regex);
@@ -615,7 +614,7 @@ namespace DantelionDataManager
         }
         private IEnumerable<string> GetMatchedFiles(string relativePath, string data, Regex regex)
         {
-            return Manager.FileDictionary[data].Where(s => s.StartsWith(relativePath) && regex.IsMatch(Path.GetFileName(s)));
+            return Handler.FileDictionary[data].Where(s => s.StartsWith(relativePath) && regex.IsMatch(Path.GetFileName(s)));
             //fs.Sort();
             //return fs;
         }

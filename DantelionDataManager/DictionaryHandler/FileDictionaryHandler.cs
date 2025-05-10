@@ -45,7 +45,7 @@ namespace DantelionDataManager.DictionaryHandler
                     return true;
                 }
             }
-            return false;
+            return ExistsInMaster(relativePath);
         }
 
         public override IEnumerable<string> GetMatchedFiles(string relativePath, string data, Regex regex)

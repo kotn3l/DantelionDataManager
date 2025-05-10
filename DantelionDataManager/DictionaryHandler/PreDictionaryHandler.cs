@@ -22,20 +22,6 @@ namespace DantelionDataManager.DictionaryHandler
             }
         }
 
-        public override bool Exists(string relativePath)
-        {
-            ulong hash = _hashCalc.GetFilePathHash(relativePath);
-            foreach (var kvp in _master)
-            {
-                if (kvp.Value.MasterBucket.Any(x => x.FileNameHash == hash))
-                {
-                    FileDictionary[kvp.Key].Add(relativePath);
-                    return true;
-                }
-            }
-            return false;
-        }
-
         public override string WhichArchive(string relativePath)
         {
             string d = base.WhichArchive(relativePath);

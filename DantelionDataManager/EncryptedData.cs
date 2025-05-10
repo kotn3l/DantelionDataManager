@@ -245,20 +245,6 @@ namespace DantelionDataManager
             }
             return files;
         }
-        private void SaveFileDictionaries()
-        {
-            foreach (var filess in Handler.FileDictionary)
-            {
-                using StreamWriter sw = new StreamWriter(Path.Combine(AssemblyLocation, $@"Data\{Id}\{filess.Key.Split('\\')[0]}.txt"));
-                foreach (var kvp in filess.Value.OrderBy(x => x))
-                {
-                    sw.WriteLine(kvp);
-                }
-                sw.Flush();
-                sw.BaseStream?.Flush();
-                sw.Close();
-            }
-        }
         private void RecalculateFileDistribution(HashSet<string> files, bool addCurrent = false)
         {
             _log.LogDebug(this, _logid, "Recalculating file distribution among all archives");

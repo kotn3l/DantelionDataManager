@@ -16,9 +16,22 @@ namespace DantelionDataManager.DictionaryHandler
             FileDictionary = new Dictionary<string, HashSet<string>>();
         }
 
+        protected bool ExistsInMaster(string relativePath)
+        {
+            ulong hash = _hashCalc.GetFilePathHash(relativePath);
+            foreach (var kvp in _master)
+            {
+                if (kvp.Value.MasterBucket.Any(hash))
+                {
+                    FileDictionary[kvp.Key].Add(relativePath);
+                    return true;
+                }
+            }
+            return false;
+        }
+        public virtual bool Exists(string relativePath) => ExistsInMaster(relativePath);
         public abstract IEnumerable<string> WhichArchive(string relativePath, Regex pattern);
         public abstract string WhichArchive(string relativePath);
-        public abstract bool Exists(string relativePath);
         public abstract IEnumerable<string> GetMatchedFiles(string relativePath, string data, Regex regex);
         public virtual void Dispose()
         {

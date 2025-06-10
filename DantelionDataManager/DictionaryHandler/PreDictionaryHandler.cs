@@ -43,17 +43,7 @@ namespace DantelionDataManager.DictionaryHandler
 
         public override void Dispose()
         {
-            using (var sw = new StreamWriter(_dictPath))
-            {
-                foreach (var kvp in FileDictionary)
-                {
-                    sw.WriteLine($"#{kvp.Key}");
-                    foreach (var line in kvp.Value)
-                    {
-                        sw.WriteLine(line);
-                    }
-                }
-            }
+            SaveDictionary(_dictPath);
         }
     }
 }

@@ -26,7 +26,10 @@ namespace DantelionDataManager
 
         public void Write(GameData data)
         {
-            Bytes = Data?.Write();
+            if (Data != null)
+            {
+                Bytes = Data.Write();
+            }
             data.SetMem(Path, Bytes);
         }
     }

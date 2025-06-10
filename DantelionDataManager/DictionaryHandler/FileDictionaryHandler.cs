@@ -16,6 +16,21 @@ namespace DantelionDataManager.DictionaryHandler
             ReadFileDictionaryCombined(dictPath);
         }
 
+        public void SaveDictionary(string dictPath)
+        {
+            using (var sw = new StreamWriter(dictPath))
+            {
+                foreach (var kvp in FileDictionary)
+                {
+                    sw.WriteLine($"#{kvp.Key}");
+                    foreach (var line in kvp.Value)
+                    {
+                        sw.WriteLine(line);
+                    }
+                }
+            }
+        }
+
         protected virtual void ReadFileDictionaryCombined(string dictPath)
         {
             using (StreamReader sr = new StreamReader(dictPath))
@@ -66,7 +81,12 @@ namespace DantelionDataManager.DictionaryHandler
 
         public override string WhichArchive(string relativePath)
         {
-            return FileDictionary.Where(x => x.Value.Contains(relativePath)).Select(x => x.Key).FirstOrDefault();
+            var key = FileDictionary.Where(x => x.Value.Contains(relativePath)).Select(x => x.Key).FirstOrDefault();
+            if (key == null)
+            {
+                return ExistsInWhichMaster(relativePath);
+            }
+            return key;
         }
     }
 }

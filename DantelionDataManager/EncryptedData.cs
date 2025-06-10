@@ -222,12 +222,20 @@ namespace DantelionDataManager
             {
                 _log.LogWarning(this, _logid, "No game dictionary found at {p}", _dictionaryFile);
                 Handler = new PreDictionaryHandler(_genericDictionaryFile, _dictionaryFile, _master, _hash);
+                //((PreDictionaryHandler)Handler).GuessChrs();
                 return;
             }
             Handler = new FileDictionaryHandler(_dictionaryFile, _master, _hash);
             _log.LogInfo(this, _logid, "{n} filenames read", Handler.FileDictionary.Sum(x => x.Value.Count));
 
             VerifyFilesPerArchive();
+            //RecalculateFileDistribution([], true);
+        }
+
+        public void SaveDicitonary()
+        {
+            ((FileDictionaryHandler)Handler).SaveDictionary(_dictionaryFile);
+
         }
         private HashSet<string> ReadFileNames(string file = "add")
         {
@@ -292,7 +300,7 @@ namespace DantelionDataManager
                 }
             });
             string ga = GetType().ToString().Split('.').Last();
-            StreamWriter sw = new StreamWriter(Path.Combine(AssemblyLocation, $@"Data\{ga}\{ga}2.txt"));
+            StreamWriter sw = new StreamWriter(Path.Combine(AssemblyLocation, _dictionaryFile + "new"));
             foreach (var kvp in dict.OrderBy(x => x.Key))
             {
                 {
@@ -494,7 +502,7 @@ namespace DantelionDataManager
             //game.log.LogDebug(this, game.logid, "Searching for file {f} in {d} archive", relativePath, data);
             ulong hash = _hash.GetFilePathHash(relativePath);
             //foreach (var file in _master[data].MasterBucket.SelectMany(x => x.FastLookup.TryGetValue(hash, out _)))
-            if (_master[data].MasterBucket.TryGetValue(hash, out var file))
+            if (_master[data].MasterBucket.TryGet(hash, out var file))
             //foreach (var file in _master[data].FastLookup.AsParallel().SelectMany(x => x.FastLookup.Where(y => y.FileNameHash == hash)))
             {
                 _log.LogInfo(this, data, "Found {f}", relativePath);

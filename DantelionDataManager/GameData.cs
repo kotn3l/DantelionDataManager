@@ -11,7 +11,7 @@ namespace DantelionDataManager
 {
     public abstract class GameData
     {
-        protected static readonly HashSet<string> _neverCompressed = ["hks", "bdt", "bhd", "bin", "plt", "prx", "dat", "sha", "dds", "png", "sfo", "xml", "sig", "info", "sprx" ];
+        protected static readonly HashSet<string> _neverCompressed = [ "hks", "bdt", "bhd", "bin", "plt", "prx", "dat", "sha", "dds", "png", "sfo", "xml", "sig", "info", "sprx", "gfx" ];
         //protected readonly ADantelionGame _game;
         public readonly string RootPath;
         public readonly string OutPath;

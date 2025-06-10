@@ -1,4 +1,5 @@
-﻿using DantelionDataManager.Extensions;
+﻿using DantelionDataManager.DictionaryHandler;
+using DantelionDataManager.Extensions;
 using DantelionDataManager.Log;
 using DotNext.IO.MemoryMappedFiles;
 using SoulsFormats;
@@ -17,26 +18,27 @@ namespace DantelionDataManager
 {
     public class EncryptedData : GameData, IDisposable
     {
-        private const string DEFAULT_KEY = "default";
-
         private readonly Dictionary<string, BHD5> _master;
         private readonly Aes _AES;
         private readonly string _relativeCacheDir;
         private readonly string _absoluteCacheDir;
         private readonly string _keysFile;
         private readonly string _dictionaryFile;
+        private readonly string _genericDictionaryFile;
+        protected IFileHash _hash;
 
         public readonly Dictionary<string, string> Keys;
-        public readonly Dictionary<string, HashSet<string>> Files;
+        private BaseDictionaryHandler Handler;
         public readonly BHD5.Game Id;
 
         public EncryptedData(string root, string outP, BHD5.Game BHDgame, string[] bhdPaths = null, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, logId)
         {
             _log.LogInfo(this, _logid, "Using Encrypted Data");
             _master = new Dictionary<string, BHD5>();
-            Files = new Dictionary<string, HashSet<string>>();
+            //FileDictionary = new Dictionary<string, HashSet<string>>();
             Keys = keys;
             Id = BHDgame;
+            _hash = GetHashingAlgo();
 
             _AES = Aes.Create();
             _AES.Mode = CipherMode.ECB;
@@ -47,6 +49,7 @@ namespace DantelionDataManager
             _absoluteCacheDir = Path.Combine(AssemblyLocation, _relativeCacheDir);
             _keysFile = Path.Combine(AssemblyLocation, $@"Data\{Id}\keys");
             _dictionaryFile = Path.Combine(AssemblyLocation, $@"Data\{Id}\{Id}.txt");
+            _genericDictionaryFile = Path.Combine(AssemblyLocation, $@"Data\generic.txt");
             IOExtensions.CheckDir(_absoluteCacheDir);
 
             bhdPaths ??= Directory.GetFiles(RootPath, "*.bhd", SearchOption.AllDirectories);
@@ -58,6 +61,13 @@ namespace DantelionDataManager
             InitDictionary(bhdPaths);
             Keys ??= ReadKeys();
             InitArchives(bhdPaths);
+            ReadFileDictionaryCombined();
+
+        }
+
+        protected virtual IFileHash GetHashingAlgo()
+        {
+            return new OldFileHash();
         }
 
         private Dictionary<string, string> ReadKeys()
@@ -172,12 +182,8 @@ namespace DantelionDataManager
             {
                 string data = GetBHDArchive(f).ToLowerInvariant();
                 _master.Add(data, null);
-                Files.Add(data, new HashSet<string>());
+                //FileDictionary.Add(data, new HashSet<string>());
             }
-
-            //ReadFileDictionaries();
-            ReadFileDictionaryCombined();
-            //SaveFileDictionaries();
         }
         private void InitArchives(string[] bhdPaths)
         {
@@ -205,57 +211,31 @@ namespace DantelionDataManager
             _log.LogInfo(this, _logid, "All threads finished in {t}ms", Stopwatch.GetElapsedTime(startTime).TotalMilliseconds);
             //DictionaryFileCoverage();
             //VerifyFilesInArchive();
-            VerifyFilesPerArchive();
             //SetUnknownFiles();
             //RecalculateFileDistribution(ReadFileNames($"{Id}"), true);
             //RecalculateFileDistribution(ReadFileNames(), true);
         }
 
-        private void ReadFileDictionaries()
-        {
-            foreach (var m in _master.Keys)
-            {
-                string path = Path.Combine(AssemblyLocation, $@"Data\{Id}\{m.Split('\\')[0]}.txt");
-                if (!File.Exists(path))
-                {
-                    _log.LogWarning(this, _logid, "No {l} dictionary found at {p}", m, path);
-                    continue;
-                }
-                using (StreamReader sr = new StreamReader(path))
-                {
-                    string line;
-                    while ((line = sr.ReadLine()) != null)
-                    {
-                        Files[m].Add(line.Trim());
-                    }
-                }
-                _log.LogInfo(this, m, "{n} filenames read", Files[m].Count);
-            }           
-        }
         private void ReadFileDictionaryCombined()
         {
             if (!File.Exists(_dictionaryFile))
             {
                 _log.LogWarning(this, _logid, "No game dictionary found at {p}", _dictionaryFile);
+                Handler = new PreDictionaryHandler(_genericDictionaryFile, _dictionaryFile, _master, _hash);
+                //((PreDictionaryHandler)Handler).GuessChrs();
                 return;
             }
-            using (StreamReader sr = new StreamReader(_dictionaryFile))
-            {
-                string line = sr.ReadLine();
-                while (line != null)
-                {
-                    while (line == "" || line[0] != '#')
-                    {
-                        line = sr.ReadLine();
-                    }
-                    string k = line[1..].ToLowerInvariant();
-                    while ((line = sr.ReadLine()) != null && line != "" && line[0] != '#')
-                    {
-                        Files[k].Add(line.Trim());
-                    }
-                }
-            }
-            _log.LogInfo(this, _logid, "{n} filenames read", Files.Sum(x => x.Value.Count));
+            Handler = new FileDictionaryHandler(_dictionaryFile, _master, _hash);
+            _log.LogInfo(this, _logid, "{n} filenames read", Handler.FileDictionary.Sum(x => x.Value.Count));
+
+            VerifyFilesPerArchive();
+            //RecalculateFileDistribution([], true);
+        }
+
+        public void SaveDicitonary()
+        {
+            ((FileDictionaryHandler)Handler).SaveDictionary(_dictionaryFile);
+
         }
         private HashSet<string> ReadFileNames(string file = "add")
         {
@@ -273,20 +253,6 @@ namespace DantelionDataManager
             }
             return files;
         }
-        private void SaveFileDictionaries()
-        {
-            foreach (var filess in Files)
-            {
-                using StreamWriter sw = new StreamWriter(Path.Combine(AssemblyLocation, $@"Data\{Id}\{filess.Key.Split('\\')[0]}.txt"));
-                foreach (var kvp in filess.Value.OrderBy(x => x))
-                {
-                    sw.WriteLine(kvp);
-                }
-                sw.Flush();
-                sw.BaseStream?.Flush();
-                sw.Close();
-            }
-        }
         private void RecalculateFileDistribution(HashSet<string> files, bool addCurrent = false)
         {
             _log.LogDebug(this, _logid, "Recalculating file distribution among all archives");
@@ -302,13 +268,13 @@ namespace DantelionDataManager
             Dictionary<ulong, string> lowerFiles;
             if (addCurrent)
             {
-                foreach (var item in Files.SelectMany(x => x.Value))
+                foreach (var item in Handler.FileDictionary.SelectMany(x => x.Value))
                 {
                     files.Add(item);
                 }
             }
             // Convert all filenames to lowercase once
-            lowerFiles = files.Select(f => f.ToLowerInvariant()).ToHashSet().ToDictionary(GetFilePathHash, x => x);
+            lowerFiles = files.Select(f => f.ToLowerInvariant()).ToHashSet().ToDictionary(_hash.GetFilePathHash, x => x);
 
             // Use Parallel.ForEach for better thread management
             Parallel.ForEach(_master, kvp =>
@@ -334,7 +300,7 @@ namespace DantelionDataManager
                 }
             });
             string ga = GetType().ToString().Split('.').Last();
-            StreamWriter sw = new StreamWriter(Path.Combine(AssemblyLocation, $@"Data\{ga}\{ga}2.txt"));
+            StreamWriter sw = new StreamWriter(Path.Combine(AssemblyLocation, _dictionaryFile + "new"));
             foreach (var kvp in dict.OrderBy(x => x.Key))
             {
                 {
@@ -351,8 +317,8 @@ namespace DantelionDataManager
         }
         public void SetUnknownFiles()
         {
-            HashSet<string> files = new HashSet<string>(Files.SelectMany(x => x.Value));
-            Dictionary<ulong, string> lowerFiles = files.Select(f => f.ToLowerInvariant()).ToHashSet().ToDictionary(GetFilePathHash, x => x);
+            HashSet<string> files = new HashSet<string>(Handler.FileDictionary.SelectMany(x => x.Value));
+            Dictionary<ulong, string> lowerFiles = files.Select(f => f.ToLowerInvariant()).ToHashSet().ToDictionary(_hash.GetFilePathHash, x => x);
             HashSet<string> guessed = new HashSet<string>();
             foreach (var kvp in _master)
             //Parallel.ForEach(_master, kvp =>
@@ -440,18 +406,18 @@ namespace DantelionDataManager
         }
         private void DictionaryFileCoverage()
         {
-            int sumDict = Files.Sum(x => x.Value.Count);
+            int sumDict = Handler.FileDictionary.Sum(x => x.Value.Count);
             int sumGame = _master.Sum(x => x.Value.Buckets.Sum(y => y.Count));
             _log.LogDebug(this, _logid, "Dictionary files: {n} vs Master files: {m} ({p}% covered)", sumDict, sumGame, Math.Round((sumDict / (float)sumGame) * 100, 2));
         }
         private void VerifyFilesInArchive()
         {
-            int sumDict = Files.Sum(x => x.Value.Count);
-            var list = Files.Values.SelectMany(list => list).ToArray();
+            int sumDict = Handler.FileDictionary.Sum(x => x.Value.Count);
+            var list = Handler.FileDictionary.Values.SelectMany(list => list).ToArray();
             var hashes = new ulong[sumDict];
             Parallel.For(0, sumDict, i =>
                 {
-                    hashes[i] = GetFilePathHash(list[i]);
+                    hashes[i] = _hash.GetFilePathHash(list[i]);
                 }
             );
             var ga = _master.Values.SelectMany(x => x.Buckets.SelectMany(y => y.Select(z => z.FileNameHash))).ToArray();
@@ -463,7 +429,7 @@ namespace DantelionDataManager
             var dict = new Dictionary<string, HashSet<ulong>>();
             var hashes = new Dictionary<string, HashSet<ulong>>();
 
-            foreach (var item in Files)
+            foreach (var item in Handler.FileDictionary)
             {
                 if (item.Value.Count < 1)
                 {
@@ -479,7 +445,7 @@ namespace DantelionDataManager
 
                 Parallel.ForEach(item.Value, i =>
                 {
-                    var hash = GetFilePathHash(i);
+                    var hash = _hash.GetFilePathHash(i);
                     lock (fileHashes)
                     {
                         fileHashes.Add(hash);
@@ -530,32 +496,13 @@ namespace DantelionDataManager
             }
             _master[data] = BHD5.Read(cache.DecryptedBHD, Id);
         }
-        
-        private IEnumerable<string> WhichArchive(string relativePath, Regex pattern)
-        {
-            foreach (var kvp in Files)
-            {
-                if (kvp.Value.Any(x => x.StartsWith(relativePath) && pattern.IsMatch(Path.GetFileName(x))))
-                {
-                    yield return kvp.Key;
-                }
-            }
-        }
-        private string WhichArchive(string relativePath)
-        {
-            return Files.Where(x => x.Value.Contains(relativePath)).Select(x => x.Key).FirstOrDefault();
-        }
-        private bool ArchiveContains(string archive, string relativePath)
-        {
-            return Files[archive].Any(x => x.Equals(relativePath));
-        }
         private Memory<byte> GetFile(string data, string relativePath)
         {
             var startTime = Stopwatch.GetTimestamp();
             //game.log.LogDebug(this, game.logid, "Searching for file {f} in {d} archive", relativePath, data);
-            ulong hash = GetFilePathHash(relativePath);
+            ulong hash = _hash.GetFilePathHash(relativePath);
             //foreach (var file in _master[data].MasterBucket.SelectMany(x => x.FastLookup.TryGetValue(hash, out _)))
-            if (_master[data].MasterBucket.TryGetValue(hash, out var file))
+            if (_master[data].MasterBucket.TryGet(hash, out var file))
             //foreach (var file in _master[data].FastLookup.AsParallel().SelectMany(x => x.FastLookup.Where(y => y.FileNameHash == hash)))
             {
                 _log.LogInfo(this, data, "Found {f}", relativePath);
@@ -609,30 +556,10 @@ namespace DantelionDataManager
             var acc = f.CreateMemoryAccessor(offset, (int)size, MemoryMappedFileAccess.Read);
             return acc.Memory;
         }
-        protected virtual ulong GetFilePathHash(string path)
-        {
-            const uint prime = 37u;
-            uint hash = 0u;
-            unchecked
-            {
-                for (int i = 0; i < path.Length; i++)
-                {
-                    hash = hash * prime + path[i];
-                }
-            }
-            return hash;
-        }
 
         public override bool Exists(string relativePath)
         {
-            foreach (var kvp in Files)
-            {
-                if (kvp.Value.Contains(CheckPath(relativePath)))
-                {
-                    return true;
-                }
-            }
-            return false;
+            return Handler.Exists(CheckPath(relativePath));
         }
 
         public override GameFile Get(string relativePath)
@@ -643,7 +570,7 @@ namespace DantelionDataManager
             {
                 return value;
             }*/
-            string a = WhichArchive(relativePath);
+            string a = Handler.WhichArchive(relativePath);
             if (string.IsNullOrEmpty(a))
             {
                 return new GameFile(relativePath, Memory<byte>.Empty);
@@ -657,7 +584,7 @@ namespace DantelionDataManager
             //Dictionary<string, Memory<byte>> bytes = new Dictionary<string, Memory<byte>>();
             relativePath = CheckPath(relativePath);
             Regex regex = PathPattern(pattern);
-            foreach (var data in WhichArchive(relativePath, regex))
+            foreach (var data in Handler.WhichArchive(relativePath, regex))
             {
                 _log.LogInfo(this, _logid, "Searching for file in subfolder {f} with pattern {p}, regex={r}", relativePath, pattern, regex.ToString());
                 var fs = GetMatchedFiles(relativePath, data, regex);
@@ -679,13 +606,14 @@ namespace DantelionDataManager
         }
         private IEnumerable<string> GetMatchedFiles(string relativePath, string data, Regex regex)
         {
-            return Files[data].Where(s => s.StartsWith(relativePath) && regex.IsMatch(Path.GetFileName(s)));
+            return Handler.FileDictionary[data].Where(s => s.StartsWith(relativePath) && regex.IsMatch(Path.GetFileName(s)));
             //fs.Sort();
             //return fs;
         }
 
         public void Dispose()
         {
+            Handler.Dispose();
             _AES.Dispose();
             GC.SuppressFinalize(this);
         }
@@ -696,18 +624,10 @@ namespace DantelionDataManager
         {
             _log.LogInfo(this, _logid, "Using ER Encrypted Data");
         }
-        protected override ulong GetFilePathHash(string path)
+
+        protected override IFileHash GetHashingAlgo()
         {
-            const ulong prime = 0x85ul;
-            ulong hash = 0u;
-            unchecked
-            {
-                for (int i = 0; i < path.Length; i++)
-                {
-                    hash = hash * prime + (ulong)path[i];
-                }
-            }
-            return hash;
+            return new NewFileHash();
         }
     }
 }

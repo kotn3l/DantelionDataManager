@@ -38,6 +38,9 @@
     <None Update="Data\EldenRing\keys">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="Data\generic.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="Data\Sekiro\keys">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

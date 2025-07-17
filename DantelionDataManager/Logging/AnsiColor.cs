@@ -1,9 +1,41 @@
-﻿using System.Text.RegularExpressions;
+﻿using Serilog.Events;
+using Serilog.Formatting;
+using System.Text.RegularExpressions;
 
 namespace DantelionDataManager.Log
 {
-    public static class AnsiColor
+
+    public class AnsiColorRemoveTextFormatter : ITextFormatter
     {
+        private readonly string _outputTemplate;
+
+        public AnsiColorRemoveTextFormatter(string outputTemplate)
+        {
+            _outputTemplate = outputTemplate;
+        }
+
+        public void Format(LogEvent logEvent, TextWriter output)
+        {
+            using var sw = new StringWriter();
+            var formatter = new Serilog.Formatting.Display.MessageTemplateTextFormatter(_outputTemplate, null);
+            formatter.Format(logEvent, sw);
+
+            var rendered = sw.ToString();
+            var replaced = AnsiColor.NoAnsiInLog(rendered);
+            output.Write(replaced);
+        }
+    }
+
+    public static partial class AnsiColor
+    {
+        [GeneratedRegex(@"\x1B(?:\[[0-9;]*m|\[[0-9]*;[0-9]*m)")]
+        private static partial Regex LogNoAnsi();
+
+        public static string NoAnsiInLog(string msg)
+        {
+            return LogNoAnsi().Replace(msg, string.Empty);
+        }
+
         public const string reset = "\x1B[0m";
         public const string black = "\x1B[30m";
         private static string ApplyColorToAll(string message, string color)

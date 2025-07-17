@@ -11,7 +11,7 @@ namespace DantelionDataManager
 {
     public abstract class GameData
     {
-        protected static readonly HashSet<string> _neverCompressed = [ "hks", "bdt", "bhd", "bin", "plt", "prx", "dat", "sha", "dds", "png", "sfo", "xml", "sig", "info", "sprx", "gfx" ];
+        protected static readonly HashSet<string> _neverCompressed = [ "hks", "bdt", "bhd", "bin", "plt", "prx", "dat", "sha", "dds", "png", "sfo", "xml", "sig", "info", "sprx", "gfx", "bnk" ];
         //protected readonly ADantelionGame _game;
         public readonly string RootPath;
         public readonly string OutPath;
@@ -71,12 +71,10 @@ namespace DantelionDataManager
 
         public GameData(string rootPath, string outPath, string logId)
         {
-            //this._game = g;
             RootPath = rootPath;
             OutPath = outPath;
             _logid = logId;
-            //_log = ALogWrapper.Get();
-            _log = new LogWrapper($"{this.OutPath}\\log{DateTime.Now:yyMMdd_HHmmss}.txt", new ConsoleOutput());
+            _log = new LogWrapper($"{this.OutPath}", new ConsoleAndFileOutput());
             var p = Process.GetCurrentProcess();
             p.PriorityClass = ProcessPriorityClass.High;
             AssemblyLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -197,10 +195,10 @@ namespace DantelionDataManager
         public static Regex PathPattern(string pattern) => new Regex("^" + Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".").Replace(@"\.\*", @"\*") + "$");
         public virtual void DumpAllFiles(bool keepOriginalPaths = true)
         {
-            foreach (var file in Get("/", "*", true))
+            Parallel.ForEach(Get("/", "*", true), file =>
             {
                 SetMem("/dump/" + file.Path, file.Bytes);
-            }
+            });
         }
     }
 }

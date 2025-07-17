@@ -210,10 +210,10 @@ namespace DantelionDataManager
         {
             if (keepOriginalPaths)
             {
-                foreach (var file in InternalGetMem("/", "*", true))
+                Parallel.ForEach(InternalGetMem("/", "*", true), file =>
                 {
-                    SetMem(file.Key, file.Value);
-                }
+                    SetMem("/dump/" + file.Key, file.Value);
+                });
             }
             else
             {

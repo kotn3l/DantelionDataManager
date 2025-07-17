@@ -455,10 +455,10 @@ namespace DantelionDataManager
                 int actual = array.Count(fileHashes.Contains);
                 double percentage = Math.Round((actual / (float)array.Count) * 100, 2);
                 string innermsg = AnsiColor.PercentageCoverageColorLog("{d} {p}% covered. {n}/{m}", percentage);
-                _log.LogInfo(this, item.Key, innermsg, item.Key, percentage, actual, array.Count);
+                _log.LogInfo(this, _logid, innermsg, item.Key, percentage, actual, array.Count);
                 if (array.Count > actual)
                 {
-                    _log.LogDebug(this, item.Key, "{n} files missing.", array.Count - actual);
+                    _log.LogDebug(this, _logid, "{n} files missing in {n}.", array.Count - actual, item.Key);
                 }
             }
 
@@ -478,20 +478,20 @@ namespace DantelionDataManager
 
         private string GetBHDArchive(string file)
         {
-            return file.Substring(RootPath.Length + 1).Split('.')[0];
+            return file[(RootPath.Length + 1)..].Split('.')[0];
         }
         private void InitData(string file, string data)
         {
             using var cache = new BHDCache(file, _absoluteCacheDir, $"{data.Replace('\\', '_')}");
             if (cache.IsValid)
             {
-                _log.LogInfo(this, data, AnsiColor.FadedOrange("Cache MD5 hash ({m}...) match"), cache.OriginalMD5[..4]);
+                _log.LogInfo(this, _logid, AnsiColor.FadedOrange("Cache MD5 hash ({m}...) match" + "for {a}"), cache.OriginalMD5[..4], data);
             }
             else
             {
-                _log.LogWarning(this, data, "BHD Cache is wrong");
-                _log.LogInfo(this, data, "Decrypting BHD for {d}", data);
-                _log.LogInfo(this, data, "Saving cache to {l}", cache.CachePath);
+                _log.LogWarning(this, _logid, "BHD Cache is wrong");
+                _log.LogInfo(this, _logid, "Decrypting BHD for {d}", data);
+                _log.LogInfo(this, _logid, "Saving cache to {l}", cache.CachePath);
                 cache.OverwriteCache(Keys[data]);
             }
             _master[data] = BHD5.Read(cache.DecryptedBHD, Id);
@@ -505,7 +505,7 @@ namespace DantelionDataManager
             if (_master[data].MasterBucket.TryGet(hash, out var file))
             //foreach (var file in _master[data].FastLookup.AsParallel().SelectMany(x => x.FastLookup.Where(y => y.FileNameHash == hash)))
             {
-                _log.LogInfo(this, data, "Found {f}", relativePath);
+                _log.LogInfo(this, _logid, "Found {f} in {d}", relativePath, data);
                 //_log.LogDebug(this, data, "hash:{h}", file.FileNameHash);
                 //_log.LogDebug(this, data, "in bucket {b} (with count {c}), fileheader {j}", i, _master[data].Buckets[i].Count, j);
                 byte[] fileBytes = RetrieveFileFromBDTAsArray(file.FileOffset, file.PaddedFileSize, data);
@@ -578,7 +578,22 @@ namespace DantelionDataManager
             else return new GameFile(relativePath, GetFile(a, relativePath));
             //return Get(relativePath);
         }
-
+        public IEnumerable<GameFile> GetAllFromArchive(string key, bool load = true)
+        {
+            foreach (var file in Handler.FileDictionary[key])
+            {
+                if (load)
+                {
+                    yield return new GameFile(file, GetFile(key, file));
+                    //bytes.Add(file, GetFile(data, file));
+                }
+                else
+                {
+                    yield return new GameFile(file, Memory<byte>.Empty);
+                    //bytes.Add(file, Memory<byte>.Empty);
+                }
+            }
+        }
         public override IEnumerable<GameFile> Get(string relativePath, string pattern, bool load = true)
         {
             //Dictionary<string, Memory<byte>> bytes = new Dictionary<string, Memory<byte>>();

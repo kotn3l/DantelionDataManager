@@ -74,7 +74,7 @@ namespace DantelionDataManager
             RootPath = rootPath;
             OutPath = outPath;
             _logid = logId;
-            _log = new LogWrapper($"{this.OutPath}", new ConsoleAndFileOutput());
+            _log = new LogWrapper($"{this.OutPath}", new ConsoleAndSeparateFileOutput());
             var p = Process.GetCurrentProcess();
             p.PriorityClass = ProcessPriorityClass.High;
             AssemblyLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);

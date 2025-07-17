@@ -458,7 +458,7 @@ namespace DantelionDataManager
                 _log.LogInfo(this, _logid, innermsg, item.Key, percentage, actual, array.Count);
                 if (array.Count > actual)
                 {
-                    _log.LogDebug(this, _logid, "{n} files missing in {n}.", array.Count - actual, item.Key);
+                    _log.LogDebug(this, _logid, "{n} files missing in {m}.", array.Count - actual, item.Key);
                 }
             }
 

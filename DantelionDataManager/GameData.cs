@@ -26,7 +26,7 @@ namespace DantelionDataManager
             {
                 return new PKGData(rootPath, outPath, logId);
             }
-            var arch = Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories);
+            var arch = Directory.GetFiles(rootPath, "*.bhd", SearchOption.TopDirectoryOnly);
             if (arch.Length < 1)
             {
                 return new DecryptedData(rootPath, outPath, logId);
@@ -35,11 +35,11 @@ namespace DantelionDataManager
             {
                 if (isModern)
                 {
-                    return new ModernEncryptedData(rootPath, outPath, BHDgame, arch, keys, logId);
+                    return new ModernEncryptedData(rootPath, outPath, BHDgame, keys, logId);
                 }
                 else
                 {
-                    return new EncryptedData(rootPath, outPath, BHDgame, arch, keys, logId);
+                    return new EncryptedData(rootPath, outPath, BHDgame, keys, logId);
                 }
             }
         }
@@ -54,19 +54,19 @@ namespace DantelionDataManager
         }
         public static EncryptedData InitGameData_PreEldenRing(string rootPath, string outPath, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA")
         {
-            return new EncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), keys, logId);
+            return new EncryptedData(rootPath, outPath, BHDgame, keys, logId);
         }
         public static EncryptedData InitGameData_PostEldenRing(string rootPath, string outPath, BHD5.Game BHDgame, Dictionary<string, string> keys, string logId = "DATA")
         {
-            return new ModernEncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), keys, logId);
+            return new ModernEncryptedData(rootPath, outPath, BHDgame, keys, logId);
         }
         public static EncryptedData InitGameData_PreEldenRing(string rootPath, string outPath, BHD5.Game BHDgame = BHD5.Game.DarkSouls3, string logId = "DATA")
         {
-            return new EncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), null, logId);
+            return new EncryptedData(rootPath, outPath, BHDgame, null, logId);
         }
         public static EncryptedData InitGameData_PostEldenRing(string rootPath, string outPath, BHD5.Game BHDgame = BHD5.Game.EldenRing, string logId = "DATA")
         {
-            return new ModernEncryptedData(rootPath, outPath, BHDgame, Directory.GetFiles(rootPath, "*.bhd", SearchOption.AllDirectories), null, logId);
+            return new ModernEncryptedData(rootPath, outPath, BHDgame, null, logId);
         }
 
         public GameData(string rootPath, string outPath, string logId)

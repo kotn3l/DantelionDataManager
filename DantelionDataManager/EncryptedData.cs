@@ -31,7 +31,7 @@ namespace DantelionDataManager
         private BaseDictionaryHandler Handler;
         public readonly BHD5.Game Id;
 
-        public EncryptedData(string root, string outP, BHD5.Game BHDgame, string[] bhdPaths = null, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, logId)
+        public EncryptedData(string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, logId)
         {
             _log.LogInfo(this, _logid, "Using Encrypted Data");
             _master = new Dictionary<string, BHD5>();
@@ -52,8 +52,17 @@ namespace DantelionDataManager
             _genericDictionaryFile = Path.Combine(AssemblyLocation, $@"Data\generic.txt");
             IOExtensions.CheckDir(_absoluteCacheDir);
 
-            bhdPaths ??= Directory.GetFiles(RootPath, "*.bhd", SearchOption.AllDirectories);
-            if (bhdPaths.Length < 1)
+            var bhdPaths1 = Directory.GetFiles(RootPath, "data*.bhd", SearchOption.TopDirectoryOnly);
+            var bhdPaths2 = Directory.GetFiles(RootPath, "dlc*.bhd", SearchOption.TopDirectoryOnly);
+            var bhdPaths = bhdPaths1.Concat(bhdPaths2);
+            var sdDir = RootPath + "/sd";
+            if (Directory.Exists(sdDir))
+            {
+                var bhdPaths3 = Directory.GetFiles(sdDir, "sd*.bhd", SearchOption.TopDirectoryOnly);
+                bhdPaths = bhdPaths.Concat(bhdPaths3);
+            }
+
+            if (!bhdPaths.Any())
             {
                 throw new Exception("Can't find any BHDs!");
             }
@@ -62,7 +71,6 @@ namespace DantelionDataManager
             Keys ??= ReadKeys();
             InitArchives(bhdPaths);
             ReadFileDictionaryCombined();
-
         }
 
         protected virtual IFileHash GetHashingAlgo()
@@ -176,7 +184,7 @@ namespace DantelionDataManager
                 sw.WriteLine(kvp.Value);
             }
         }
-        private void InitDictionary(string[] bhdPaths)
+        private void InitDictionary(IEnumerable<string> bhdPaths)
         {
             foreach (var f in bhdPaths)
             {
@@ -185,7 +193,7 @@ namespace DantelionDataManager
                 //FileDictionary.Add(data, new HashSet<string>());
             }
         }
-        private void InitArchives(string[] bhdPaths)
+        private void InitArchives(IEnumerable<string> bhdPaths)
         {
             var startTime = Stopwatch.GetTimestamp();
             Parallel.ForEach(bhdPaths, f =>
@@ -635,7 +643,7 @@ namespace DantelionDataManager
     }
     public class ModernEncryptedData : EncryptedData
     {
-        public ModernEncryptedData(string root, string outP, BHD5.Game BHDgame, string[] bhdPaths = null, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, BHDgame, bhdPaths, keys, logId)
+        public ModernEncryptedData(string root, string outP, BHD5.Game BHDgame, Dictionary<string, string> keys = null, string logId = "DATA") : base(root, outP, BHDgame, keys, logId)
         {
             _log.LogInfo(this, _logid, "Using ER Encrypted Data");
         }

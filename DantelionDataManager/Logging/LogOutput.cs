@@ -12,7 +12,7 @@ namespace DantelionDataManager.Log
 #if DEBUG
             return new LoggerConfiguration().Enrich.FromLogContext().MinimumLevel.Verbose();
 #endif
-            return new LoggerConfiguration().Enrich.FromLogContext();
+            return new LoggerConfiguration().Enrich.FromLogContext().MinimumLevel.Debug();
         }
         public abstract ILogger GetLogger(string filename);
     }
@@ -30,7 +30,8 @@ namespace DantelionDataManager.Log
     {
         public override ILogger GetLogger(string filename)
         {
-            return DefaultLogConfig().WriteTo.Async(x => x.File(filename, outputTemplate: _outTemplate)).CreateLogger();
+            var rformatter = new AnsiColorRemoveTextFormatter(_outTemplate);
+            return DefaultLogConfig().WriteTo.Async(x => x.File(rformatter, filename)).CreateLogger();
         }
     }
 

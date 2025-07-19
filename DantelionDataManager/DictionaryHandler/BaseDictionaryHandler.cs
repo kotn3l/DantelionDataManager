@@ -28,7 +28,7 @@ namespace DantelionDataManager.DictionaryHandler
             ulong hash = _hashCalc.GetFilePathHash(relativePath);
             foreach (var kvp in _master)
             {
-                if (kvp.Value.MasterBucket.Any(hash))
+                if (kvp.Value != null && kvp.Value.MasterBucket.Any(hash))
                 {
                     FileDictionary[kvp.Key].Add(relativePath);
                     _modified = true;

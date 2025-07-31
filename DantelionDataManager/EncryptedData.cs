@@ -493,11 +493,11 @@ namespace DantelionDataManager
             using var cache = new BHDCache(file, _absoluteCacheDir, $"{data.Replace('\\', '_')}");
             if (cache.IsValid)
             {
-                _log.LogInfo(this, _logid, AnsiColor.FadedOrange("Cache MD5 hash ({m}...) match" + " for {a}"), cache.OriginalMD5[..4], data);
+                _log.LogInfo(this, _logid, AnsiColor.FadedOrange("Cache MD5 hash ({m}...) match for {a}"), cache.OriginalMD5[..4], data);
             }
             else
             {
-                _log.LogWarning(this, _logid, "BHD Cache is wrong");
+                _log.LogWarning(this, _logid, "{d} Cache is wrong", data);
                 _log.LogInfo(this, _logid, "Decrypting BHD for {d}", data);
                 _log.LogInfo(this, _logid, "Saving cache to {l}", cache.CachePath);
                 cache.OverwriteCache(Keys[data]);

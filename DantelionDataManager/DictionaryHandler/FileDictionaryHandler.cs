@@ -5,7 +5,7 @@ namespace DantelionDataManager.DictionaryHandler
 {
     public class FileDictionaryHandler : BaseDictionaryHandler
     {
-
+        protected string _dictPath;
         public FileDictionaryHandler(string dictPath, Dictionary<string, BHD5> master, IFileHash hashCalc) : base(master, hashCalc)
         {
             foreach (var kvp in master)
@@ -14,6 +14,8 @@ namespace DantelionDataManager.DictionaryHandler
             }
 
             ReadFileDictionaryCombined(dictPath);
+
+            _dictPath = dictPath;
         }
 
         public void SaveDictionary(string dictPath)

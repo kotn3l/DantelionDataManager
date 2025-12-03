@@ -233,7 +233,7 @@ namespace DantelionDataManager
                 //((PreDictionaryHandler)Handler).GuessChrs();
                 return;
             }
-            Handler = new FileDictionaryHandler(_dictionaryFile, _master, _hash);
+            Handler = new NetworkFileDictionaryHandler(_dictionaryFile, Id, _master, _hash);
             _log.LogInfo(this, _logid, "{n} filenames read", Handler.FileDictionary.Sum(x => x.Value.Count));
 
             VerifyFilesPerArchive();
@@ -439,13 +439,13 @@ namespace DantelionDataManager
 
             foreach (var item in Handler.FileDictionary)
             {
+                var array = new HashSet<ulong>(_master[item.Key].Buckets.SelectMany(y => y.Select(z => z.FileNameHash)));
+
                 if (item.Value.Count < 1)
                 {
                     _log.LogWarning(this, _logid, "The archive {d} was not found!", item.Key);
-                    //return;
+                    continue;
                 }
-
-                var array = new HashSet<ulong>(_master[item.Key].Buckets.SelectMany(y => y.Select(z => z.FileNameHash)));
 
                 var fileHashes = new HashSet<ulong>();
                 dict[item.Key] = fileHashes;

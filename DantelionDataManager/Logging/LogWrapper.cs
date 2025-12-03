@@ -52,7 +52,7 @@ namespace DantelionDataManager.Log
         }
         public override ILogger LogError(object sender, object id, Exception e, string template, params object?[]? propertyValues)
         {
-            return Log(LogEventLevel.Error, sender, id, AnsiColor.BrightRed(template + "\nMessage: {m}\nStacktrace:\n{s}"), propertyValues, e.Message, e.StackTrace);
+            return Log(LogEventLevel.Error, sender, id, AnsiColor.BrightRed(template + " | Message: {m} | Stacktrace: {s}"), propertyValues, e.Message, e.StackTrace);
         }
         public override ILogger LogFatal(object sender, object id, string template, params object?[]? propertyValues)
         {

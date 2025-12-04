@@ -19,12 +19,10 @@ namespace DantelionDataManager.DictionaryHandler
         public string GameFolder => _gameAlias[_g];
         public string GameHashFolder => $"{BASE_URL}/{GameFolder}/{FOLDER}";
 
-        private static ALogWrapper _log;
 
         public NetworkFileDictionaryHandler(string dictPath, BHD5.Game game, Dictionary<string, BHD5> master, IFileHash hashCalc) : base(dictPath, master, hashCalc)
         {
             _g = game;
-            _log = LogWrapper.Get();
             GetRemoteDictionary();
         }
 

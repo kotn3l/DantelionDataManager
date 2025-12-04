@@ -86,7 +86,7 @@ namespace DantelionDataManager.DictionaryHandler
             var key = FileDictionary.Where(x => x.Value.Contains(relativePath)).Select(x => x.Key).FirstOrDefault();
             if (key == null)
             {
-                return ExistsInWhichMaster(relativePath);
+                return ExistsInWhichMaster(relativePath).Item2;
             }
             return key;
         }

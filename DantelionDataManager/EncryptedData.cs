@@ -226,16 +226,15 @@ namespace DantelionDataManager
 
         private void ReadFileDictionaryCombined()
         {
-            if (!File.Exists(_dictionaryFile))
+            /*if (!File.Exists(_dictionaryFile))
             {
                 _log.LogWarning(this, _logid, "No game dictionary found at {p}", _dictionaryFile);
                 Handler = new PreDictionaryHandler(_genericDictionaryFile, _dictionaryFile, _master, _hash);
                 //((PreDictionaryHandler)Handler).GuessChrs();
                 return;
-            }
+            }*/
             Handler = new NetworkFileDictionaryHandler(_dictionaryFile, Id, _master, _hash);
             _log.LogInfo(this, _logid, "{n} filenames read", Handler.FileDictionary.Sum(x => x.Value.Count));
-
             VerifyFilesPerArchive();
             //RecalculateFileDistribution([], true);
         }

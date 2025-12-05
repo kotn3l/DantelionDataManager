@@ -32,36 +32,34 @@ namespace DantelionDataManager.DictionaryHandler
             {
                 string key = kvp.Key.Split('\\')[^1];
                 var tempSet = new HashSet<string>();
-                try
+                using (var client = new HttpClient())
                 {
-                    using (var client = new HttpClient())
+                    var url = $"{GameHashFolder}/{key}.txt";
+                    _log.LogDebug(this, key, "Fetching dictionary from {a}", url);
+                    var response = client.GetAsync(url).Result;
+                    //response.EnsureSuccessStatusCode();
+
+                    if (!response.IsSuccessStatusCode)
                     {
-                        var url = $"{GameHashFolder}/{key}.txt";
-                        _log.LogDebug(this, key, "Fetching dictionary from {a}", url);
-                        var response = client.GetAsync(url).Result;
-                        response.EnsureSuccessStatusCode();
-                        var content = response.Content.ReadAsStringAsync().Result;
-                        using (var sr = new StringReader(content))
+                        _log.LogWarning(this, key, "Failed to fetch dictionary from remote for {a}", key);
+                        continue;
+                    }
+
+                    var content = response.Content.ReadAsStringAsync().Result;
+                    using (var sr = new StringReader(content))
+                    {
+                        string line;
+                        while ((line = sr.ReadLine()) != null)
                         {
-                            string line;
-                            while ((line = sr.ReadLine()) != null)
-                            {
-                                tempSet.Add(line);
-                            }
+                            tempSet.Add(line);
                         }
                     }
                 }
-                catch (Exception)
-                {
-                    _log.LogWarning(this, key, "Failed to fetch dictionary from remote for {a}", key);
-                    continue;
-                }
-                
 
                 if (FileDictionary[kvp.Key].Count < tempSet.Count)
                 {
                     //log
-                    _log.LogInfo(this, key, AnsiColor.Green("Updated dictionary for {a} with {b} entries (was {c})"), key, tempSet.Count, FileDictionary[kvp.Key].Count);
+                    _log.LogInfo(this, key, AnsiColor.Green("Updated dictionary for {a} with +{c} entries."), key, tempSet.Count - FileDictionary[kvp.Key].Count);
                     FileDictionary[kvp.Key] = tempSet;
                     _updated = true;
                 }

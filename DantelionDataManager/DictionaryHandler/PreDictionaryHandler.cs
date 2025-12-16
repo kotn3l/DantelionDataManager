@@ -30,7 +30,7 @@ namespace DantelionDataManager.DictionaryHandler
             string d = base.WhichArchive(relativePath);
             if (string.IsNullOrWhiteSpace(d))
             {
-                ulong hash = _hashCalc.GetFilePathHash(relativePath);
+                ulong hash = _hash.GetFilePathHash(relativePath);
                 foreach (var kvp in _master)
                 {
                     if (kvp.Value.MasterBucket.Any(x => x.FileNameHash == hash))

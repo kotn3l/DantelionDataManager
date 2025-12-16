@@ -1,61 +1,44 @@
 ﻿using DantelionDataManager.Log;
+using DantelionDataManager.Network;
 using SoulsFormats;
 
 namespace DantelionDataManager.DictionaryHandler
 {
     public class NetworkFileDictionaryHandler : FileDictionaryHandler
     {
-        private const string BASE_URL = "https://raw.githubusercontent.com/JKAnderson/BinderKeys/refs/heads/main";
-        private const string FOLDER = "Hash";
-        private static Dictionary<BHD5.Game, string> _gameAlias = new()
-        {
-            { BHD5.Game.EldenRing, $"EldenRing_PC" },
-            { BHD5.Game.Nightreign, $"EldenRingNightreign_PC" },
-            { BHD5.Game.DarkSouls3, $"DarkSouls3_PC" },
-            { BHD5.Game.Sekiro, $"Sekiro_PC" },
-        };
-        private BHD5.Game _g;
+        private readonly BHD5.Game _g;
+        private readonly RemoteDataManager _remote;
         private bool _updated = false;
-        public string GameFolder => _gameAlias[_g];
-        public string GameHashFolder => $"{BASE_URL}/{GameFolder}/{FOLDER}";
 
-
-        public NetworkFileDictionaryHandler(string dictPath, BHD5.Game game, Dictionary<string, BHD5> master, IFileHash hashCalc) : base(dictPath, master, hashCalc)
+        public NetworkFileDictionaryHandler(string dictPath, BHD5.Game game, Dictionary<string, BHD5> master, IFileHash hashCalc, RemoteDataManager remote) : base(dictPath, master, hashCalc)
         {
+            _remote = remote;
             _g = game;
             GetRemoteDictionary();
         }
 
         private void GetRemoteDictionary()
         {
+            CalculateHashes();
+            var dicts = _remote.GetAvailableDictionaries();
+
             foreach (var kvp in _master)
             {
-                string key = kvp.Key.Split('\\')[^1];
-                var tempSet = new HashSet<string>();
-                using (var client = new HttpClient())
+                var array = new HashSet<ulong>(_master[kvp.Key].MasterBucket.Select(y => y.FileNameHash));
+                int actual = array.Count(_calculatedHashes[kvp.Key].Contains);
+                if (array.Count <= actual)
                 {
-                    var url = $"{GameHashFolder}/{key}.txt";
-                    _log.LogDebug(this, key, "Fetching dictionary from {a}", url);
-                    var response = client.GetAsync(url).Result;
-                    //response.EnsureSuccessStatusCode();
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        _log.LogWarning(this, key, "Failed to fetch dictionary from remote for {a}", key);
-                        continue;
-                    }
-
-                    var content = response.Content.ReadAsStringAsync().Result;
-                    using (var sr = new StringReader(content))
-                    {
-                        string line;
-                        while ((line = sr.ReadLine()) != null)
-                        {
-                            tempSet.Add(line);
-                        }
-                    }
+                    _log.LogDebug(this, kvp.Key, "Dictionary already up-to-date.");
+                    continue;
                 }
 
+                string key = _remote.GetMasterSimplified(kvp.Key);
+                if (dicts.TryGetValue(key, out string dictKey))
+                {
+                    continue;
+                }
+
+                var tempSet = _remote.GetRemoteDictionary(dictKey);
                 if (FileDictionary[kvp.Key].Count < tempSet.Count)
                 {
                     //log

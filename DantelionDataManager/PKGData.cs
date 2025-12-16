@@ -212,7 +212,7 @@ namespace DantelionDataManager
             {
                 Parallel.ForEach(InternalGetMem("/", "*", true), file =>
                 {
-                    SetMem("/dump/" + file.Key, file.Value);
+                    Set("/dump/" + file.Key, file.Value);
                 });
             }
             else

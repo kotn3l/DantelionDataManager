@@ -1,6 +1,7 @@
 ﻿using DantelionDataManager.DictionaryHandler;
 using DantelionDataManager.Extensions;
 using DantelionDataManager.Log;
+using DantelionDataManager.Network;
 using DotNext.IO.MemoryMappedFiles;
 using SoulsFormats;
 using System.Collections.Concurrent;
@@ -25,6 +26,7 @@ namespace DantelionDataManager
         private readonly string _keysFile;
         private readonly string _dictionaryFile;
         private readonly string _genericDictionaryFile;
+        private RemoteDataManager _remote;
         protected IFileHash _hash;
 
         public readonly Dictionary<string, string> Keys;
@@ -35,11 +37,11 @@ namespace DantelionDataManager
         {
             _log.LogInfo(this, _logid, "Using Encrypted Data");
             _master = new Dictionary<string, BHD5>();
-            //FileDictionary = new Dictionary<string, HashSet<string>>();
+
             Keys = keys;
             Id = BHDgame;
-            _hash = GetHashingAlgo();
 
+            _hash = GetHashingAlgo();
             _AES = Aes.Create();
             _AES.Mode = CipherMode.ECB;
             _AES.Padding = PaddingMode.None;
@@ -61,13 +63,13 @@ namespace DantelionDataManager
                 var bhdPaths3 = Directory.GetFiles(sdDir, "sd*.bhd", SearchOption.TopDirectoryOnly);
                 bhdPaths = bhdPaths.Concat(bhdPaths3);
             }
-
             if (!bhdPaths.Any())
             {
                 throw new Exception("Can't find any BHDs!");
             }
-
             InitDictionary(bhdPaths);
+            _remote = new RemoteDataManager(BHDgame, _master);
+
             Keys ??= ReadKeys();
             InitArchives(bhdPaths);
             ReadFileDictionaryCombined();
@@ -80,15 +82,24 @@ namespace DantelionDataManager
 
         private Dictionary<string, string> ReadKeys()
         {
+            var fkeys = new Dictionary<string, string>();
+
             if (!File.Exists(_keysFile))
             {
-                _log.LogWarning(this, _logid, "No game keys found at {p} -- trying to get keys from game exe.", _keysFile);
-                var keys = ReadKeysFromExe();
-                WriteKeysFile(keys);
-                return keys;
+                _log.LogWarning(this, _logid, "No game keys found at {p} -- trying to get keys from url.", _keysFile);
+
+                foreach (var kvp in _master)
+                {
+                    var key = _remote.GetMasterSimplified(kvp.Key);
+                    _log.LogInfo(this, key, "Fetching key for {a} from remote.", key);
+                    var remoteKey = string.Join("\r\n", _remote.GetRemoteKey(key));
+                    fkeys.Add(kvp.Key, remoteKey);
+                }
+
+                WriteKeysFile(fkeys);
+                return fkeys;
             }
 
-            var fkeys = new Dictionary<string, string>();
             using (StreamReader sr = new StreamReader(_keysFile))
             {
                 string line = sr.ReadLine();
@@ -196,7 +207,27 @@ namespace DantelionDataManager
         private void InitArchives(IEnumerable<string> bhdPaths)
         {
             var startTime = Stopwatch.GetTimestamp();
-            Parallel.ForEach(bhdPaths, f =>
+            var tasks = new List<Task>();
+            foreach (var f in bhdPaths)
+            {
+                string data = GetBHDArchive(f).ToLowerInvariant();
+                if (Keys.ContainsKey(data))
+                {
+                    tasks.Add(Task.Run(() =>
+                    {
+                        InitData(f, data);
+                    }));
+                    _log.LogInfo(this, _logid, "Starting thread {t}", data);
+                }
+                else
+                {
+                    _master[data] = new BHD5(Id);
+                    _log.LogWarning(this, _logid, "The BHD key for {d} was not found!", data);
+                }
+            }
+
+            Task.WaitAll(tasks);
+            /*Parallel.ForEach(bhdPaths, f =>
             {
                 string data = GetBHDArchive(f).ToLowerInvariant();
                 if (Keys.ContainsKey(data))
@@ -204,18 +235,13 @@ namespace DantelionDataManager
                     InitData(f, data);
                     _log.LogInfo(this, _logid, "Starting thread {t}", data);
                 }
-                /*else if (Keys.ContainsKey(DEFAULT_KEY))
-                {
-                    InitData(f, data, DEFAULT_KEY);
-                    _log.LogInfo(this, _logid, "Starting thread {t} with default key", f);
-                }*/
                 else
                 {
                     _master[data] = new BHD5(Id);
                     _log.LogWarning(this, _logid, "The BHD key for {d} was not found!", data);
                 }
             }
-            );
+            );*/
             _log.LogInfo(this, _logid, "All threads finished in {t}ms", Stopwatch.GetElapsedTime(startTime).TotalMilliseconds);
             //DictionaryFileCoverage();
             //VerifyFilesInArchive();
@@ -233,9 +259,9 @@ namespace DantelionDataManager
                 //((PreDictionaryHandler)Handler).GuessChrs();
                 return;
             }*/
-            Handler = new NetworkFileDictionaryHandler(_dictionaryFile, Id, _master, _hash);
+            Handler = new NetworkFileDictionaryHandler(_dictionaryFile, Id, _master, _hash, _remote);
             _log.LogInfo(this, _logid, "{n} filenames read", Handler.FileDictionary.Sum(x => x.Value.Count));
-            VerifyFilesPerArchive();
+            Handler.VerifyFilesPerArchive();
             //RecalculateFileDistribution([], true);
         }
 
@@ -430,57 +456,6 @@ namespace DantelionDataManager
             var ga = _master.Values.SelectMany(x => x.Buckets.SelectMany(y => y.Select(z => z.FileNameHash))).ToArray();
             var j = ga.Count(x => hashes.Contains(x));
             _log.LogDebug(this, _logid, "VERIFIED: Dictionary files: {n} vs Master files: {m} ({p}% covered)", j, ga.Length, Math.Round((j / (float)ga.Length) * 100, 2));
-        }
-        private void VerifyFilesPerArchive()
-        {
-            var dict = new Dictionary<string, HashSet<ulong>>();
-            var hashes = new Dictionary<string, HashSet<ulong>>();
-
-            foreach (var item in Handler.FileDictionary)
-            {
-                var array = new HashSet<ulong>(_master[item.Key].Buckets.SelectMany(y => y.Select(z => z.FileNameHash)));
-
-                if (item.Value.Count < 1)
-                {
-                    _log.LogWarning(this, _logid, "The archive {d} was not found!", item.Key);
-                    continue;
-                }
-
-                var fileHashes = new HashSet<ulong>();
-                dict[item.Key] = fileHashes;
-                hashes[item.Key] = array;
-
-                Parallel.ForEach(item.Value, i =>
-                {
-                    var hash = _hash.GetFilePathHash(i);
-                    lock (fileHashes)
-                    {
-                        fileHashes.Add(hash);
-                    }
-                });
-
-                int actual = array.Count(fileHashes.Contains);
-                double percentage = Math.Round((actual / (float)array.Count) * 100, 2);
-                string innermsg = AnsiColor.PercentageCoverageColorLog("{d} {p}% covered. {n}/{m}", percentage);
-                _log.LogInfo(this, _logid, innermsg, item.Key, percentage, actual, array.Count);
-                if (array.Count > actual)
-                {
-                    _log.LogDebug(this, _logid, "{n} files missing in {m}.", array.Count - actual, item.Key);
-                }
-            }
-
-            //var allFileHashes = new HashSet<ulong>(dict.Values.SelectMany(x => x));
-            //int totalMatches = hashes.Values.SelectMany(x => x).Count(dict.Values.SelectMany(x => x).Contains);
-            var dictHashSet = new HashSet<ulong>(dict.Values.SelectMany(x => x));
-            int totalMatches = hashes.Values.SelectMany(x => x).Count(dictHashSet.Contains);
-            int gameFiles = hashes.Values.Sum(x => x.Count);
-            double percent = Math.Round((totalMatches / (float)hashes.Values.Sum(x => x.Count)) * 100, 2);
-            string msg = AnsiColor.PercentageCoverageColorLog("Total {p}% covered. {n}/{m}", percent);
-            _log.LogInfo(this, _logid, msg, percent, totalMatches, gameFiles);
-            if (gameFiles > totalMatches)
-            {
-                _log.LogDebug(this, _logid, "Total {n} files missing.", gameFiles - totalMatches);
-            }
         }
 
         private string GetBHDArchive(string file)

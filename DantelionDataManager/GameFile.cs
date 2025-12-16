@@ -2,7 +2,7 @@
 
 namespace DantelionDataManager
 {
-    public class GameFile
+    public class GameFile : IDisposable
     {
         public string Path { get; private set; }
         public Memory<byte> Bytes { get; private set; }
@@ -30,7 +30,13 @@ namespace DantelionDataManager
             {
                 Bytes = Data.Write();
             }
-            data.SetMem(Path, Bytes);
+            data.Set(Path, Bytes);
+        }
+
+        public void Dispose()
+        {
+            Bytes = null;
+            Data = null;
         }
     }
 }

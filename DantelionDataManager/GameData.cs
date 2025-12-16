@@ -120,11 +120,15 @@ namespace DantelionDataManager
                 yield return gf;
             }
         }
+        public string Set(GameFile f)
+        {
+            return Set(f.Path, f.Bytes);
+        }
         public string Set(string relativePath, byte[] data)
         {
             return data.WriteBytes(SetSetup(relativePath));
         }
-        public string SetMem(string relativePath, Memory<byte> data)
+        public string Set(string relativePath, Memory<byte> data)
         {
             string s = SetSetup(relativePath);
             using var fs = new FileStream(s, FileMode.Create);
@@ -197,7 +201,7 @@ namespace DantelionDataManager
         {
             Parallel.ForEach(Get("/", "*", true), file =>
             {
-                SetMem("/dump/" + file.Path, file.Bytes);
+                Set("/dump/" + file.Path, file.Bytes);
             });
         }
     }

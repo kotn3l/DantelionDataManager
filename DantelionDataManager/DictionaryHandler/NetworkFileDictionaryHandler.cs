@@ -33,7 +33,7 @@ namespace DantelionDataManager.DictionaryHandler
                 }
 
                 string key = _remote.GetMasterSimplified(kvp.Key);
-                if (dicts.TryGetValue(key, out string dictKey))
+                if (!dicts.TryGetValue(key, out string dictKey))
                 {
                     continue;
                 }

@@ -22,20 +22,21 @@ namespace DantelionDataManager.DictionaryHandler
             CalculateHashes();
             var dicts = _remote.GetAvailableDictionaries();
 
-            foreach (var kvp in _master)
+            Parallel.ForEach(_master, kvp =>
+            //foreach (var kvp in _master)
             {
                 var array = new HashSet<ulong>(_master[kvp.Key].MasterBucket.Select(y => y.FileNameHash));
                 int actual = array.Count(_calculatedHashes[kvp.Key].Contains);
                 if (array.Count <= actual)
                 {
                     _log.LogDebug(this, kvp.Key, "Dictionary already up-to-date.");
-                    continue;
+                    return;
                 }
 
                 string key = _remote.GetMasterSimplified(kvp.Key);
                 if (!dicts.TryGetValue(key, out string dictKey))
                 {
-                    continue;
+                    return;
                 }
 
                 var tempSet = _remote.GetRemoteDictionary(dictKey);
@@ -46,7 +47,7 @@ namespace DantelionDataManager.DictionaryHandler
                     FileDictionary[kvp.Key] = tempSet;
                     _updated = true;
                 }
-            }
+            });
 
             if (_updated)
             {

@@ -111,6 +111,16 @@ namespace DantelionDataManager
             gf.Load(load);
             return gf;
         }
+
+        public Memory<byte> GetFromOutputFolder(string relativePath)
+        {
+            string s = SetSetup(relativePath);
+            if (File.Exists(s))
+            {
+                return ReadMemory(s);
+            }
+            else return Array.Empty<byte>();
+        }
         public abstract IEnumerable<GameFile> Get(string relativePath, string pattern, bool load = true);
         public IEnumerable<GameFile> Get(string relativePath, string pattern, Func<Memory<byte>, ISoulsFile> load)
         {

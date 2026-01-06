@@ -1,9 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace DantelionDataManager
 {
     public interface IFileHash
@@ -11,7 +5,7 @@ namespace DantelionDataManager
         ulong GetFilePathHash(string path);
     }
 
-    public class OldFileHash : IFileHash
+    public class FileHash32 : IFileHash
     {
         public ulong GetFilePathHash(string path)
         {
@@ -28,7 +22,7 @@ namespace DantelionDataManager
         }
     }
 
-    public class NewFileHash : IFileHash
+    public class FileHash64 : IFileHash
     {
         public ulong GetFilePathHash(string path)
         {

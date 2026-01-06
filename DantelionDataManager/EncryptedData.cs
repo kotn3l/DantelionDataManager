@@ -77,7 +77,7 @@ namespace DantelionDataManager
 
         protected virtual IFileHash GetHashingAlgo()
         {
-            return new OldFileHash();
+            return new FileHash32();
         }
 
         private Dictionary<string, string> ReadKeys()
@@ -364,54 +364,55 @@ namespace DantelionDataManager
                         if (!lowerFiles.TryGetValue(file.FileNameHash, out string _))
                         {
                             _log.LogDebug(this, _logid, "UNKNOWN file found in {n} with hash {h}", kvp.Key, file.FileNameHash);
-                            var bytes = RetrieveFileFromBDTAsArray(file.FileOffset, file.PaddedFileSize, kvp.Key);
+                            var bytes = RetrieveFileFromBDTAsArray(file, kvp.Key);
+                            Memory<byte> decompressed = bytes;
                             if (DCX.Is(bytes))
                             {
-                                var decompressed = DCX.Decompress(bytes);
-                                if (BND4.Is(decompressed))
+                                decompressed = DCX.Decompress(bytes);
+                            }
+                            if (BND4.Is(decompressed))
+                            {
+                                var bnd = BND4.Read(decompressed);
+                                var ff = bnd.Files.FirstOrDefault();
+                                string s = IOExtensions.GetFileNameWithoutExtensions(ff?.Name).ToLowerInvariant();
+                                if (ff != null)
                                 {
-                                    var bnd = BND4.Read(decompressed);
-                                    var ff = bnd.Files.FirstOrDefault();
-                                    string s = IOExtensions.GetFileNameWithoutExtensions(ff?.Name).ToLowerInvariant();
-                                    if (ff != null)
+                                    /*if (IOExtensions.IsExtension(ff.Name, ".flver"))
                                     {
-                                        /*if (IOExtensions.IsExtension(ff.Name, ".flver"))
-                                        {
-                                            var flver = FLVER2.Read(ff.Bytes);
-                                            ;
-                                        }*/
-                                        if (s.StartsWith("aeg", StringComparison.InvariantCultureIgnoreCase))
-                                        {
-                                            /*var ma = new MapAsset(bnd, s, _game);
-                                            ma.GetConverter().ConvertAll();
-
-                                            var aegs = s.Split('_');
-                                            var s2 = s.Replace("aeg", "aet");
-                                            var aets = s2.Split('_');
-
-                                            guessed.Add(@$"/asset/aeg/{aegs[0]}/{s}.geombnd.dcx");
-                                            guessed.Add(@$"/asset/aeg/{aegs[0]}/{s}_l.geomhkxbnd.dcx");
-                                            guessed.Add(@$"/asset/aeg/{aegs[0]}/{s}_h.geomhkxbnd.dcx");
-
-                                            guessed.Add(@$"/asset/aet/{aets[0]}/{s2}.tpf.dcx");
-                                            guessed.Add(@$"/asset/aet/{aets[0]}/{s2}_l.tpf.dcx");*/
-
-                                        }
-                                        Set($"_unk/{kvp.Key}_{file.FileNameHash}.bnd", DCX.Decompress(bytes).ToArray());
-                                    }
-                                    else
+                                        var flver = FLVER2.Read(ff.Bytes);
+                                        ;
+                                    }*/
+                                    if (s.StartsWith("aeg", StringComparison.InvariantCultureIgnoreCase))
                                     {
-                                        Set($"_unk/{kvp.Key}_{file.FileNameHash}.bnd", DCX.Decompress(bytes).ToArray());
+                                        /*var ma = new MapAsset(bnd, s, _game);
+                                        ma.GetConverter().ConvertAll();
+
+                                        var aegs = s.Split('_');
+                                        var s2 = s.Replace("aeg", "aet");
+                                        var aets = s2.Split('_');
+
+                                        guessed.Add(@$"/asset/aeg/{aegs[0]}/{s}.geombnd.dcx");
+                                        guessed.Add(@$"/asset/aeg/{aegs[0]}/{s}_l.geomhkxbnd.dcx");
+                                        guessed.Add(@$"/asset/aeg/{aegs[0]}/{s}_h.geomhkxbnd.dcx");
+
+                                        guessed.Add(@$"/asset/aet/{aets[0]}/{s2}.tpf.dcx");
+                                        guessed.Add(@$"/asset/aet/{aets[0]}/{s2}_l.tpf.dcx");*/
+                                        ;
                                     }
-                                }
-                                else if (TPF.Is(decompressed))
-                                {
-                                    throw new NotImplementedException();
+                                    Set($"_unk/{kvp.Key}_{file.FileNameHash}.bnd", decompressed.ToArray());
                                 }
                                 else
                                 {
-                                    Set($"_unk/{kvp.Key}_{file.FileNameHash}.dcxdecomp", DCX.Decompress(bytes).ToArray());
+                                    Set($"_unk/{kvp.Key}_{file.FileNameHash}.bnd", decompressed.ToArray());
                                 }
+                            }
+                            else if (TPF.Is(decompressed))
+                            {
+                                var tt = TPF.Read(decompressed);
+
+                                
+                                Set($"_unk/{kvp.Key}_{file.FileNameHash}.tpf", decompressed.ToArray());
+                                //throw new NotImplementedException();
                             }
                             else
                             {
@@ -478,6 +479,7 @@ namespace DantelionDataManager
             }
             _master[data] = BHD5.Read(cache.DecryptedBHD, Id);
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Memory<byte> GetFile(string data, string relativePath)
         {
             var startTime = Stopwatch.GetTimestamp();
@@ -490,41 +492,42 @@ namespace DantelionDataManager
                 _log.LogInfo(this, _logid, "Found {f} in {d}", relativePath, data);
                 //_log.LogDebug(this, data, "hash:{h}", file.FileNameHash);
                 //_log.LogDebug(this, data, "in bucket {b} (with count {c}), fileheader {j}", i, _master[data].Buckets[i].Count, j);
-                byte[] fileBytes = RetrieveFileFromBDTAsArray(file.FileOffset, file.PaddedFileSize, data);
-                byte[] decryptedFileBytes = fileBytes;
-
-                if (file.AESKey != null)
-                {
-                    using ICryptoTransform decryptor = _AES.CreateDecryptor(file.AESKey.Key, new byte[16]);
-                    for (int k = 0; k < file.AESKey.Ranges.Count; k++)
-                    //Parallel.For(0, file.AESKey.Ranges.Count, k =>
-                    {
-                        var range = file.AESKey.Ranges[k];
-                        if (range.StartOffset != -1 && range.EndOffset != -1 && range.StartOffset != range.EndOffset)
-                        {
-                            var startOffset = (int)range.StartOffset;
-                            var endOffset = (int)range.EndOffset;
-                            decryptor.TransformBlock(decryptedFileBytes, startOffset, endOffset - startOffset, decryptedFileBytes, startOffset);
-                        }
-                    }
-                    //);
-                }
+                byte[] fileBytes = RetrieveFileFromBDTAsArray(file, data);
                 //lock (_alreadyLoaded) _alreadyLoaded.Add(relativePath, decryptedFileBytes);
                 _log.LogInfo(this, _logid, AnsiColor.Green("SUCCESS") + " loading in {t}μs!", Stopwatch.GetElapsedTime(startTime).Microseconds);
-                return decryptedFileBytes;
+                return fileBytes;
             }
             return Array.Empty<byte>();
         }
-        private byte[] RetrieveFileFromBDTAsArray(long offset, long size, string data)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private byte[] RetrieveFileFromBDTAsArray(BHD5.FileHeader file, string data)
         {
             using var f = MemoryMappedFile.CreateFromFile($"{RootPath}\\{data}.bdt", FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
-            using var mem = f.CreateMemoryAccessor(offset, (int)size, MemoryMappedFileAccess.Read);
-            byte[] buffer = new byte[size];
+            using var mem = f.CreateMemoryAccessor(file.FileOffset, (int)file.PaddedFileSize, MemoryMappedFileAccess.Read);
+            byte[] buffer = new byte[file.PaddedFileSize];
 
             ref byte src = ref MemoryMarshal.GetReference(mem.Span);
             ref byte dst = ref MemoryMarshal.GetArrayDataReference(buffer);
 
-            Unsafe.CopyBlockUnaligned(ref Unsafe.As<byte, byte>(ref dst), ref src, (uint)(sizeof(byte) * size));
+            Unsafe.CopyBlockUnaligned(ref Unsafe.As<byte, byte>(ref dst), ref src, (uint)(sizeof(byte) * file.PaddedFileSize));
+
+            byte[] decryptedFileBytes = buffer;
+            if (file.AESKey != null)
+            {
+                using ICryptoTransform decryptor = _AES.CreateDecryptor(file.AESKey.Key, new byte[16]);
+                for (int k = 0; k < file.AESKey.Ranges.Count; k++)
+                //Parallel.For(0, file.AESKey.Ranges.Count, k =>
+                {
+                    var range = file.AESKey.Ranges[k];
+                    if (range.StartOffset != -1 && range.EndOffset != -1 && range.StartOffset != range.EndOffset)
+                    {
+                        var startOffset = (int)range.StartOffset;
+                        var endOffset = (int)range.EndOffset;
+                        decryptor.TransformBlock(decryptedFileBytes, startOffset, endOffset - startOffset, decryptedFileBytes, startOffset);
+                    }
+                }
+                //);
+            }
 
             return buffer;
             /*using var stream = f.CreateViewStream(offset, (int)size, MemoryMappedFileAccess.Read);
@@ -624,7 +627,7 @@ namespace DantelionDataManager
 
         protected override IFileHash GetHashingAlgo()
         {
-            return new NewFileHash();
+            return new FileHash64();
         }
     }
 }

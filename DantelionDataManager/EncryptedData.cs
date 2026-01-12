@@ -20,6 +20,7 @@ namespace DantelionDataManager
     public class EncryptedData : GameData, IDisposable
     {
         private readonly Dictionary<string, BHD5> _master;
+        private readonly Dictionary<string, MemoryMappedFile> _bdtCache;
         private readonly Aes _AES;
         private readonly string _relativeCacheDir;
         private readonly string _absoluteCacheDir;
@@ -37,6 +38,7 @@ namespace DantelionDataManager
         {
             _log.LogInfo(this, _logid, "Using Encrypted Data");
             _master = new Dictionary<string, BHD5>();
+            _bdtCache = new Dictionary<string, MemoryMappedFile>();
 
             Keys = keys;
             Id = BHDgame;
@@ -218,6 +220,7 @@ namespace DantelionDataManager
                         InitData(f, data);
                     }));
                     _log.LogInfo(this, _logid, "Starting thread {t}", data);
+                    _bdtCache.Add(data, MemoryMappedFile.CreateFromFile($"{RootPath}\\{data}.bdt", FileMode.Open, null, 0, MemoryMappedFileAccess.Read));
                 }
                 else
                 {
@@ -479,61 +482,51 @@ namespace DantelionDataManager
             }
             _master[data] = BHD5.Read(cache.DecryptedBHD, Id);
         }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Memory<byte> GetFile(string data, string relativePath)
         {
             var startTime = Stopwatch.GetTimestamp();
-            //game.log.LogDebug(this, game.logid, "Searching for file {f} in {d} archive", relativePath, data);
             ulong hash = _hash.GetFilePathHash(relativePath);
-            //foreach (var file in _master[data].MasterBucket.SelectMany(x => x.FastLookup.TryGetValue(hash, out _)))
             if (_master[data].MasterBucket.TryGet(hash, out var file))
-            //foreach (var file in _master[data].FastLookup.AsParallel().SelectMany(x => x.FastLookup.Where(y => y.FileNameHash == hash)))
             {
                 _log.LogInfo(this, _logid, "Found {f} in {d}", relativePath, data);
-                //_log.LogDebug(this, data, "hash:{h}", file.FileNameHash);
-                //_log.LogDebug(this, data, "in bucket {b} (with count {c}), fileheader {j}", i, _master[data].Buckets[i].Count, j);
-                byte[] fileBytes = RetrieveFileFromBDTAsArray(file, data);
-                //lock (_alreadyLoaded) _alreadyLoaded.Add(relativePath, decryptedFileBytes);
+                var fileBytes = RetrieveFileFromBDTAsArray(file, data);
                 _log.LogInfo(this, _logid, AnsiColor.Green("SUCCESS") + " loading in {t}μs!", Stopwatch.GetElapsedTime(startTime).Microseconds);
                 return fileBytes;
             }
             return Array.Empty<byte>();
         }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte[] RetrieveFileFromBDTAsArray(BHD5.FileHeader file, string data)
-        {
-            using var f = MemoryMappedFile.CreateFromFile($"{RootPath}\\{data}.bdt", FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
-            using var mem = f.CreateMemoryAccessor(file.FileOffset, (int)file.PaddedFileSize, MemoryMappedFileAccess.Read);
-            byte[] buffer = new byte[file.PaddedFileSize];
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Memory<byte> RetrieveFileFromBDTAsArray(BHD5.FileHeader file, string data)
+        {
+            var f = _bdtCache[data];
+            using var mem = f.CreateMemoryAccessor(file.FileOffset, (int)file.PaddedFileSize, MemoryMappedFileAccess.Read);
+            if (file.AESKey == null)
+            {
+                return mem.Memory.Span.ToArray();
+            }
+
+            byte[] buffer = new byte[file.PaddedFileSize];
             ref byte src = ref MemoryMarshal.GetReference(mem.Span);
             ref byte dst = ref MemoryMarshal.GetArrayDataReference(buffer);
 
-            Unsafe.CopyBlockUnaligned(ref Unsafe.As<byte, byte>(ref dst), ref src, (uint)(sizeof(byte) * file.PaddedFileSize));
+            Unsafe.CopyBlockUnaligned(ref dst, ref src, (uint)file.PaddedFileSize);
 
-            byte[] decryptedFileBytes = buffer;
-            if (file.AESKey != null)
+            using ICryptoTransform decryptor = _AES.CreateDecryptor(file.AESKey.Key, new byte[16]);
+            for (int k = 0; k < file.AESKey.Ranges.Count; k++)
             {
-                using ICryptoTransform decryptor = _AES.CreateDecryptor(file.AESKey.Key, new byte[16]);
-                for (int k = 0; k < file.AESKey.Ranges.Count; k++)
-                //Parallel.For(0, file.AESKey.Ranges.Count, k =>
+                var range = file.AESKey.Ranges[k];
+                if (range.StartOffset != -1 && range.EndOffset != -1 && range.StartOffset != range.EndOffset)
                 {
-                    var range = file.AESKey.Ranges[k];
-                    if (range.StartOffset != -1 && range.EndOffset != -1 && range.StartOffset != range.EndOffset)
-                    {
-                        var startOffset = (int)range.StartOffset;
-                        var endOffset = (int)range.EndOffset;
-                        decryptor.TransformBlock(decryptedFileBytes, startOffset, endOffset - startOffset, decryptedFileBytes, startOffset);
-                    }
+                    var startOffset = (int)range.StartOffset;
+                    var endOffset = (int)range.EndOffset;
+                    decryptor.TransformBlock(buffer, startOffset, endOffset - startOffset, buffer, startOffset);
                 }
-                //);
             }
 
             return buffer;
-            /*using var stream = f.CreateViewStream(offset, (int)size, MemoryMappedFileAccess.Read);
-            byte[] bytes = new byte[size];
-            stream.Read(bytes, 0, (int)size);
-            return bytes;*/
         }
         private Memory<byte> RetrieveFileFromBDT(long offset, long size, string data)
         {
@@ -579,40 +572,60 @@ namespace DantelionDataManager
                 }
             }
         }
+
         public override IEnumerable<GameFile> Get(string relativePath, string pattern, bool load = true)
         {
             //Dictionary<string, Memory<byte>> bytes = new Dictionary<string, Memory<byte>>();
             relativePath = CheckPath(relativePath);
             Regex regex = PathPattern(pattern);
+            Func<string, string, GameFile> delegateLoad;
+            if (load)
+            {
+                delegateLoad = new Func<string, string, GameFile>(GetGameFile);
+            }
+            else
+            {
+                delegateLoad = new Func<string, string, GameFile>(GetEmptyGameFile);
+            }
+
             foreach (var data in Handler.WhichArchive(relativePath, regex))
             {
                 _log.LogInfo(this, _logid, "Searching for file in subfolder {f} with pattern {p}, regex={r}", relativePath, pattern, regex.ToString());
                 var fs = GetMatchedFiles(relativePath, data, regex);
-                //_log.LogDebug(this, _logid, "Found {p} files matching in {d}", fs.Count, data);
+
                 foreach (var file in fs)
                 {
-                    if (load)
-                    {
-                        yield return new GameFile(file, GetFile(data, file));
-                        //bytes.Add(file, GetFile(data, file));
-                    }
-                    else
-                    {
-                        yield return new GameFile(file, Memory<byte>.Empty);
-                        //bytes.Add(file, Memory<byte>.Empty);
-                    }
+                    yield return delegateLoad(data, file);
                 }
             }
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private GameFile GetGameFile(string data, string file)
+        {
+            return new GameFile(file, GetFile(data, file));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private GameFile GetEmptyGameFile(string data, string file)
+        {
+            return new GameFile(file, Memory<byte>.Empty);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private IEnumerable<string> GetMatchedFiles(string relativePath, string data, Regex regex)
         {
-            return Handler.FileDictionary[data].Where(s => s.StartsWith(relativePath) && regex.IsMatch(Path.GetFileName(s)));
+            return Handler.FileDictionary[data]
+                .Where(s => s.StartsWith(relativePath) && regex.IsMatch(Path.GetFileName(s)))
+                .Where(f => _master[data].MasterBucket.Any(_hash.GetFilePathHash(f))); //the file actually exits in the archive
             //fs.Sort();
             //return fs;
         }
 
         public void Dispose()
         {
+            foreach (var kvp in _bdtCache)
+            {
+                kvp.Value.Dispose();
+            }
             Handler.Dispose();
             _AES.Dispose();
             GC.SuppressFinalize(this);

@@ -39,7 +39,7 @@ namespace DantelionDataManager
             if (File.Exists(s))
             {
                 _log.LogInfo(this, _logid, "Loading file {f}", relativePath);
-                return new GameFile(relativePath, ReadMemory(s));
+                return new GameFile(relativePath, ReadMemory(s).Bytes);
             }
             else return new GameFile(relativePath, Memory<byte>.Empty);
         }
@@ -52,7 +52,7 @@ namespace DantelionDataManager
                 string s = $"{CheckPath(f[(RootPath.Length + 1)..])}";
                 if (load)
                 {
-                    yield return new GameFile(s, ReadMemory(f));
+                    yield return new GameFile(s, ReadMemory(f).Bytes);
                 }
                 else yield return new GameFile(s, Memory<byte>.Empty);
             }

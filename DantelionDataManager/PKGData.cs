@@ -63,7 +63,7 @@ namespace DantelionDataManager
             if (data._pkg.CheckPasscode("00000000000000000000000000000000"))
             {
                 data._passcode = "00000000000000000000000000000000";
-                data._ekpfs = Crypto.ComputeKeys(data._pkg.Header.content_id, data._passcode, 1);
+                data._ekpfs = LibOrbisPkg.Util.Crypto.ComputeKeys(data._pkg.Header.content_id, data._passcode, 1);
                 _log.LogDebug(this, _logid, "PKG passcode is default");
             }
             else

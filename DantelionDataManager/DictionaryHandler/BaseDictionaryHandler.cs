@@ -99,14 +99,11 @@ namespace DantelionDataManager.DictionaryHandler
             {
                 var fileHashes = new HashSet<ulong>();
                 _calculatedHashes[item.Key] = fileHashes;
-                Parallel.ForEach(item.Value, i =>
+                foreach (var i in item.Value)
                 {
                     var hash = _hash.GetFilePathHash(i);
-                    lock (fileHashes)
-                    {
-                        fileHashes.Add(hash);
-                    }
-                });
+                    fileHashes.Add(hash);
+                }
             }
         }
 

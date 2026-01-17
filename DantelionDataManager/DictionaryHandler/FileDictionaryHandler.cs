@@ -84,10 +84,7 @@ namespace DantelionDataManager.DictionaryHandler
         public override string WhichArchive(string relativePath)
         {
             var key = FileDictionary.Where(x => x.Value.Contains(relativePath)).Select(x => x.Key).FirstOrDefault();
-            if (key == null)
-            {
-                return ExistsInWhichMaster(relativePath).Item2;
-            }
+            key ??= FileDictionary.Keys.First();
             return key;
         }
     }

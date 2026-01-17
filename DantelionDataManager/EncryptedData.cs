@@ -1,4 +1,5 @@
-﻿using DantelionDataManager.DictionaryHandler;
+﻿using DantelionDataManager.Crypto;
+using DantelionDataManager.DictionaryHandler;
 using DantelionDataManager.Extensions;
 using DantelionDataManager.Log;
 using DantelionDataManager.Network;
@@ -21,7 +22,6 @@ namespace DantelionDataManager
     {
         private readonly Dictionary<string, BHD5> _master;
         private readonly Dictionary<string, MemoryMappedFile> _bdtCache;
-        private readonly Aes _AES;
         private readonly string _relativeCacheDir;
         private readonly string _absoluteCacheDir;
         private readonly string _keysFile;
@@ -44,10 +44,6 @@ namespace DantelionDataManager
             Id = BHDgame;
 
             _hash = GetHashingAlgo();
-            _AES = Aes.Create();
-            _AES.Mode = CipherMode.ECB;
-            _AES.Padding = PaddingMode.None;
-            _AES.KeySize = 128;
 
             _relativeCacheDir = $@"Data\{Id}\.cache";
             _absoluteCacheDir = Path.Combine(AssemblyLocation, _relativeCacheDir);
@@ -73,8 +69,10 @@ namespace DantelionDataManager
             _remote = new RemoteDataManager(BHDgame, _master);
 
             Keys ??= ReadKeys();
-            InitArchives(bhdPaths);
-            ReadFileDictionaryCombined();
+            var t1 = Task.Run(() => InitArchives(bhdPaths));
+            var t2 = Task.Run(() => ReadFileDictionaryCombined());
+
+            Task.WaitAll(t1, t2);
         }
 
         protected virtual IFileHash GetHashingAlgo()
@@ -367,11 +365,11 @@ namespace DantelionDataManager
                         if (!lowerFiles.TryGetValue(file.FileNameHash, out string _))
                         {
                             _log.LogDebug(this, _logid, "UNKNOWN file found in {n} with hash {h}", kvp.Key, file.FileNameHash);
-                            var bytes = RetrieveFileFromBDTAsArray(file, kvp.Key);
-                            Memory<byte> decompressed = bytes;
-                            if (DCX.Is(bytes))
+                            var bytes = RetrieveFileFromBDTAsMappedDecrypted(file, kvp.Key);
+                            Memory<byte> decompressed = bytes.Memory;
+                            if (DCX.Is(decompressed))
                             {
-                                decompressed = DCX.Decompress(bytes);
+                                decompressed = DCX.Decompress(decompressed);
                             }
                             if (BND4.Is(decompressed))
                             {
@@ -419,7 +417,7 @@ namespace DantelionDataManager
                             }
                             else
                             {
-                                Set($"_unk/{kvp.Key}_{file.FileNameHash}.unk", bytes);
+                                Set($"_unk/{kvp.Key}_{file.FileNameHash}.unk", decompressed);
                             }
                         }
                     }
@@ -484,49 +482,56 @@ namespace DantelionDataManager
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Memory<byte> GetFile(string data, string relativePath)
+        private GameFile GetFile(string data, string relativePath)
         {
             var startTime = Stopwatch.GetTimestamp();
             ulong hash = _hash.GetFilePathHash(relativePath);
             if (_master[data].MasterBucket.TryGet(hash, out var file))
             {
                 _log.LogInfo(this, _logid, "Found {f} in {d}", relativePath, data);
-                var fileBytes = RetrieveFileFromBDTAsArray(file, data);
+                var gameFile = new GameFile(relativePath, RetrieveFileFromBDTAsMappedDecrypted(file, data));
                 _log.LogInfo(this, _logid, AnsiColor.Green("SUCCESS") + " loading in {t}μs!", Stopwatch.GetElapsedTime(startTime).Microseconds);
-                return fileBytes;
+                return gameFile;
             }
-            return Array.Empty<byte>();
+            return new GameFile(relativePath, Memory<byte>.Empty);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Memory<byte> RetrieveFileFromBDTAsArray(BHD5.FileHeader file, string data)
+        private IMappedMemory RetrieveFileFromBDTAsMappedDecrypted(BHD5.FileHeader file, string data)
         {
             var f = _bdtCache[data];
-            using var mem = f.CreateMemoryAccessor(file.FileOffset, (int)file.PaddedFileSize, MemoryMappedFileAccess.Read);
+
             if (file.AESKey == null)
             {
-                return mem.Memory.Span.ToArray();
+                return f.CreateMemoryAccessor(file.FileOffset, (int)file.PaddedFileSize, MemoryMappedFileAccess.Read);
             }
 
-            byte[] buffer = new byte[file.PaddedFileSize];
-            ref byte src = ref MemoryMarshal.GetReference(mem.Span);
-            ref byte dst = ref MemoryMarshal.GetArrayDataReference(buffer);
+            // For encrypted files, create a temporary memory-mapped file
+            using var tempMmf = MemoryMappedFile.CreateNew(null, file.PaddedFileSize, MemoryMappedFileAccess.ReadWrite);
+            var tempMemory = tempMmf.CreateMemoryAccessor(0, (int)file.PaddedFileSize, MemoryMappedFileAccess.ReadWrite);
 
-            Unsafe.CopyBlockUnaligned(ref dst, ref src, (uint)file.PaddedFileSize);
+            using (var sourceMemory = f.CreateMemoryAccessor(file.FileOffset, (int)file.PaddedFileSize, MemoryMappedFileAccess.Read))
+            {
+                // Copy encrypted data to temp location
+                sourceMemory.Span.CopyTo(tempMemory.Span);
+            }
 
-            using ICryptoTransform decryptor = _AES.CreateDecryptor(file.AESKey.Key, new byte[16]);
-            for (int k = 0; k < file.AESKey.Ranges.Count; k++)
+            var decryptor = new AesEcbDecryptor(file.AESKey.Key);
+            //for (int k = 0; k < file.AESKey.Ranges.Count; k++)
+            Parallel.For(0, file.AESKey.Ranges.Count, k =>
             {
                 var range = file.AESKey.Ranges[k];
-                if (range.StartOffset != -1 && range.EndOffset != -1 && range.StartOffset != range.EndOffset)
+                /*if (range.StartOffset != -1 && range.EndOffset != -1 && range.StartOffset != range.EndOffset)
                 {
-                    var startOffset = (int)range.StartOffset;
-                    var endOffset = (int)range.EndOffset;
-                    decryptor.TransformBlock(buffer, startOffset, endOffset - startOffset, buffer, startOffset);
-                }
-            }
+                    
+                }*/
+                var startOffset = (int)range.StartOffset;
+                var length = (int)(range.EndOffset - range.StartOffset);
 
-            return buffer;
+                decryptor.DecryptInPlace(tempMemory.Span.Slice(startOffset, length));
+            });
+
+            return tempMemory;
         }
         private Memory<byte> RetrieveFileFromBDT(long offset, long size, string data)
         {
@@ -544,17 +549,8 @@ namespace DantelionDataManager
         {
             _log.LogInfo(this, _logid, "Loading file {f}", relativePath);
             relativePath = CheckPath(relativePath);
-            /*lock (_alreadyLoaded) if (_alreadyLoaded.TryGetValue(relativePath, out Memory<byte> value))
-            {
-                return value;
-            }*/
             string a = Handler.WhichArchive(relativePath);
-            if (string.IsNullOrEmpty(a))
-            {
-                return new GameFile(relativePath, Memory<byte>.Empty);
-            }
-            else return new GameFile(relativePath, GetFile(a, relativePath));
-            //return Get(relativePath);
+            return GetFile(a, relativePath);
         }
         public IEnumerable<GameFile> GetAllFromArchive(string key, bool load = true)
         {
@@ -562,13 +558,11 @@ namespace DantelionDataManager
             {
                 if (load)
                 {
-                    yield return new GameFile(file, GetFile(key, file));
-                    //bytes.Add(file, GetFile(data, file));
+                    yield return GetFile(key, file);
                 }
                 else
                 {
                     yield return new GameFile(file, Memory<byte>.Empty);
-                    //bytes.Add(file, Memory<byte>.Empty);
                 }
             }
         }
@@ -578,15 +572,6 @@ namespace DantelionDataManager
             //Dictionary<string, Memory<byte>> bytes = new Dictionary<string, Memory<byte>>();
             relativePath = CheckPath(relativePath);
             Regex regex = PathPattern(pattern);
-            Func<string, string, GameFile> delegateLoad;
-            if (load)
-            {
-                delegateLoad = new Func<string, string, GameFile>(GetGameFile);
-            }
-            else
-            {
-                delegateLoad = new Func<string, string, GameFile>(GetEmptyGameFile);
-            }
 
             foreach (var data in Handler.WhichArchive(relativePath, regex))
             {
@@ -595,14 +580,14 @@ namespace DantelionDataManager
 
                 foreach (var file in fs)
                 {
-                    yield return delegateLoad(data, file);
+                    yield return GetFile(data, file);
                 }
             }
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private GameFile GetGameFile(string data, string file)
         {
-            return new GameFile(file, GetFile(data, file));
+            return GetFile(data, file);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -627,7 +612,6 @@ namespace DantelionDataManager
                 kvp.Value.Dispose();
             }
             Handler.Dispose();
-            _AES.Dispose();
             GC.SuppressFinalize(this);
         }
     }

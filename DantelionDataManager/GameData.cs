@@ -96,11 +96,11 @@ namespace DantelionDataManager
             fileStream.Close();
             return byteArray;
         }
-        public static Memory<byte> ReadMemory(string s)
+        public static GameFile ReadMemory(string s)
         {
             var f = MemoryMappedFile.CreateFromFile(s, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
             var accessor = f.CreateMemoryAccessor(0, 0, MemoryMappedFileAccess.Read);
-            return accessor.Memory;
+            return new GameFile(s, accessor);
         }
 
         public abstract bool Exists(string relativePath);
@@ -117,7 +117,7 @@ namespace DantelionDataManager
             string s = SetSetup(relativePath);
             if (File.Exists(s))
             {
-                return ReadMemory(s);
+                return ReadMemory(s).Bytes;
             }
             else return Array.Empty<byte>();
         }

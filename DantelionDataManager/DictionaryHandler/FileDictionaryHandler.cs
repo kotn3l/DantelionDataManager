@@ -25,7 +25,7 @@ namespace DantelionDataManager.DictionaryHandler
                 foreach (var kvp in FileDictionary)
                 {
                     sw.WriteLine($"#{kvp.Key}");
-                    foreach (var line in kvp.Value)
+                    foreach (var line in kvp.Value.Order())
                     {
                         sw.WriteLine(line);
                     }
@@ -35,6 +35,10 @@ namespace DantelionDataManager.DictionaryHandler
 
         protected virtual void ReadFileDictionaryCombined(string dictPath)
         {
+            if (!File.Exists(dictPath))
+            {
+                return;
+            }
             using (StreamReader sr = new StreamReader(dictPath))
             {
                 string line = sr.ReadLine();

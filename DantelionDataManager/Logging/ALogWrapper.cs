@@ -5,7 +5,7 @@ namespace DantelionDataManager.Log
     public abstract class ALogWrapper
     {
         public static ALogWrapper Instance { get; private set; }
-        public ALogWrapper()
+        protected ALogWrapper()
         {
             Instance = this;
         }

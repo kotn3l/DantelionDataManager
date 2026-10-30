@@ -28,6 +28,7 @@ namespace DantelionDataManager.Network
             { BHD5.Game.DarkSouls3, $"DarkSouls3_PC" },
             { BHD5.Game.Sekiro, $"Sekiro_PC" },
             { BHD5.Game.ArmoredCore6, $"ArmoredCore6_PC" },
+            { BHD5.Game.DarkSoulsRemastered, $"DarkSoulsRemastered_NS" },
         };
 
         private readonly BHD5.Game _g;

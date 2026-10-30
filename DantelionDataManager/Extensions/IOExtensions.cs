@@ -39,6 +39,19 @@ namespace DantelionDataManager.Extensions
                 bytes[i] = Convert.ToByte(strings[i], 16);
             return bytes;
         }
+
+        public static string ToHexString(this byte[] bytes)
+        {
+            return string.Join(" ", Array.ConvertAll(bytes, b => b.ToString("x2")));
+        }
+        public static string ToHexString(this Memory<byte> bytes)
+        {
+            return string.Join(" ", bytes.Span.ToArray().Select(b => b.ToString("x2")));
+        }
+        public static string ToHexString(this ReadOnlyMemory<byte> bytes)
+        {
+            return string.Join(" ", bytes.Span.ToArray().Select(b => b.ToString("x2")));
+        }
         public static Stream ToStream(this byte[] bytes)
         {
             return new MemoryStream(bytes)

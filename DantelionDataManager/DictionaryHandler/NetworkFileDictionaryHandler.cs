@@ -47,7 +47,8 @@ namespace DantelionDataManager.DictionaryHandler
                     FileDictionary[kvp.Key] = tempSet;
                     _updated = true;
                 }
-            });
+            }
+            );
 
             if (_updated)
             {

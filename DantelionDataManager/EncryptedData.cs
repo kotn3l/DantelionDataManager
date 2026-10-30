@@ -52,13 +52,12 @@ namespace DantelionDataManager
             _genericDictionaryFile = Path.Combine(AssemblyLocation, $@"Data\generic.txt");
             IOExtensions.CheckDir(_absoluteCacheDir);
 
-            var bhdPaths1 = Directory.GetFiles(RootPath, "data*.bhd", SearchOption.TopDirectoryOnly);
-            var bhdPaths2 = Directory.GetFiles(RootPath, "dlc*.bhd", SearchOption.TopDirectoryOnly);
-            var bhdPaths = bhdPaths1.Concat(bhdPaths2);
+            var bhdPaths = Directory.EnumerateFiles(RootPath, "*.bhd*", SearchOption.TopDirectoryOnly);
+            //var bhdPaths = bhdPaths1.Concat(bhdPaths2);
             var sdDir = RootPath + "/sd";
             if (Directory.Exists(sdDir))
             {
-                var bhdPaths3 = Directory.GetFiles(sdDir, "sd*.bhd", SearchOption.TopDirectoryOnly);
+                var bhdPaths3 = Directory.EnumerateFiles(sdDir, "*.bhd*", SearchOption.TopDirectoryOnly);
                 bhdPaths = bhdPaths.Concat(bhdPaths3);
             }
             if (!bhdPaths.Any())
@@ -69,10 +68,11 @@ namespace DantelionDataManager
             _remote = new RemoteDataManager(BHDgame, _master);
 
             Keys ??= ReadKeys();
-            var t1 = Task.Run(() => InitArchives(bhdPaths));
-            var t2 = Task.Run(() => ReadFileDictionaryCombined());
-
-            Task.WaitAll(t1, t2);
+            //var t1 = Task.Run(() => InitArchives(bhdPaths));
+            //var t2 = Task.Run(() => ReadFileDictionaryCombined());
+            InitArchives(bhdPaths);
+            ReadFileDictionaryCombined();
+            //Task.WaitAll(t1, t2);
         }
 
         protected virtual IFileHash GetHashingAlgo()
@@ -93,7 +93,10 @@ namespace DantelionDataManager
                     var key = _remote.GetMasterSimplified(kvp.Key);
                     _log.LogInfo(this, key, "Fetching key for {a} from remote.", key);
                     var remoteKey = string.Join("\r\n", _remote.GetRemoteKey(key));
-                    fkeys.Add(kvp.Key, remoteKey);
+                    if (!string.IsNullOrWhiteSpace(remoteKey))
+                    {
+                        fkeys.Add(kvp.Key, remoteKey);
+                    }
                 }
 
                 WriteKeysFile(fkeys);
@@ -218,6 +221,13 @@ namespace DantelionDataManager
                         InitData(f, data);
                     }));
                     _log.LogInfo(this, _logid, "Starting thread {t}", data);
+                    _bdtCache.Add(data, MemoryMappedFile.CreateFromFile($"{RootPath}\\{data}.bdt", FileMode.Open, null, 0, MemoryMappedFileAccess.Read));
+                }
+                else if (Keys.Count == 0)
+                {
+                    using var bhd = MemoryMappedFile.CreateFromFile(f, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
+                    using var bhdMem = bhd.CreateMemoryAccessor(0, 0, MemoryMappedFileAccess.Read);
+                    _master[data] = BHD5.Read(bhdMem.Memory, Id);
                     _bdtCache.Add(data, MemoryMappedFile.CreateFromFile($"{RootPath}\\{data}.bdt", FileMode.Open, null, 0, MemoryMappedFileAccess.Read));
                 }
                 else
@@ -349,7 +359,7 @@ namespace DantelionDataManager
             sw.BaseStream?.Flush();
             sw.Close();
         }
-        public void SetUnknownFiles()
+        public HashSet<string> SetUnknownFiles()
         {
             HashSet<string> files = new HashSet<string>(Handler.FileDictionary.SelectMany(x => x.Value));
             Dictionary<ulong, string> lowerFiles = files.Select(f => f.ToLowerInvariant()).ToHashSet().ToDictionary(_hash.GetFilePathHash, x => x);
@@ -376,6 +386,7 @@ namespace DantelionDataManager
                                 var bnd = BND4.Read(decompressed);
                                 var ff = bnd.Files.FirstOrDefault();
                                 string s = IOExtensions.GetFileNameWithoutExtensions(ff?.Name).ToLowerInvariant();
+                                string s1 = Path.GetFileName(ff?.Name).ToLowerInvariant();
                                 if (ff != null)
                                 {
                                     /*if (IOExtensions.IsExtension(ff.Name, ".flver"))
@@ -400,6 +411,12 @@ namespace DantelionDataManager
                                         guessed.Add(@$"/asset/aet/{aets[0]}/{s2}_l.tpf.dcx");*/
                                         ;
                                     }
+                                    if (ff.Name.Contains("\\parts\\"))
+                                    {
+                                        string g = "/parts/" + s + ".partsbnd.dcx";
+                                        guessed.Add(g);
+                                        Handler.Add(kvp.Key, g);
+                                    }
                                     Set($"_unk/{kvp.Key}_{file.FileNameHash}.bnd", decompressed.ToArray());
                                 }
                                 else
@@ -423,6 +440,7 @@ namespace DantelionDataManager
                     }
                 }
             }
+            RecalculateFileDistribution(ReadFileNames($"{Id}"), true);
             //);
             /*if (guessed.Count > 0)
             {
@@ -437,6 +455,7 @@ namespace DantelionDataManager
 
                 RecalculateFileDistribution(ReadFileNames($"{Id}"), true);
             }*/
+            return guessed;
             ;
         }
         private void DictionaryFileCoverage()

@@ -22,6 +22,11 @@ namespace DantelionDataManager.DictionaryHandler
             _log = LogWrapper.Get();
         }
 
+        public bool Add(string key, string file)
+        {
+            return FileDictionary[key].Add(file);
+        }
+
         protected bool ExistsInMaster(string relativePath)
         {
             var key = ExistsInWhichMaster(relativePath);

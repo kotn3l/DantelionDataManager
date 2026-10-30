@@ -1,179 +1,79 @@
 # DantelionDataManager
-A .NET library for managing (reading and writing) game files of **FromSoftware games**. Aims to provide easy access to packed game files, but it ultimately supports access to any of these three types of game data:
-* PKG data [^1] [^2]
-* encrypted (packed) data [^1] [^3]
-* decryped (unpacked) data
+A .NET library for reading and writing **FromSoftware** game files, aimed at tool developers. One API over three kinds of game data:
 
-In terms of EncrypedData, **it currently supports:**
-* Dark Souls 3
-* Sekiro
-* Elden Ring
-* Armored Core VI
+| Type | Class | Source | Notes |
+|---|---|---|---|
+| Encrypted (packed) | `EncryptedData` | PC install | Dark Souls 3, Sekiro, Elden Ring, Armored Core VI |
+| PKG | `PKGData` | PS4/PS5 `.pkg` | default pkg password only; patches supported |
+| Decrypted (unpacked) | `DecryptedData` | unpacked folder | any game |
 
-Other games might be supported, but tool functionality is limited without a file dictionary. This library is intended for tool developers.
+Encrypted and PKG sources are read-only. Writes always go to a separate output folder (`outPath`).
 
-<sub>**Other types (PKG and decrypted) were tested with (but should work with all):** Bloodborne v1.09 (PS4), Bloodborne GOTY Edition (PS4), Elden Ring CNT (PS4 and PS5), Elden Ring v1.0 (PS4 and PS5), Dark Souls 3 CNT (PS4), Sekiro v1.0 (PS4), Armored Core VI v1.0 (PS4) and other unpacked versions.</sub>
+<sub>PKG/decrypted tested with Bloodborne, Elden Ring (incl. CNT), Dark Souls 3 CNT, Sekiro and Armored Core VI.</sub>
 
-[^1]: only supports reading data
-[^2]: must be using default pkg password
-[^3]: PC versions of the game
-
-## Notable features
-### Automatic decrypting and BHDCache for fast re-runs (EncryptedData)
-
-When first running the code, all bhds will be decrypted using the keys in the working *Data* folder.* Then, the decrypted bhds are saved with an MD5 hash as a `.bhdcache` file.
-
-On future runs if the cache file is valid, those are used instead for super fast startups. (If invalid, they're deleted and automatically decrypted again.)
-
-The retrieved files from the bdts are also automatically decrypted when needed.
-
-#### *Unsupported games (missing keys / file dictionary)
-
-The code will attempt to read the archive keys from the game exe, and dump them. However without a file dictionary, loading files by a path pattern is not viable. If a file explicitly input by the user does exist, it is saved into a makeshift dictionary, and dumped upon application shutdown into the working *Data* directory.
-
-### Patch "loading" (PKGData)
-Supports loading patches for PKGs. This simply means that for files that exist in the patch will be read from there (instead of the main pkg). 
-
-## Initialization
-
-Can be initialized with calling the constructors of the three main classes (`DecryptedData`, `EncryptedData` or `PKGGameData`), or feel free to use the provided static methods available through `GameData` base class.
-
-All of them take a `rootPath` and an `outPath` parameter, while `EncryptedData` also takes an additional `BHDgame` parameter.
-`rootPath` is where we're reading data from, `outPath` is where we're writing data to. An example will be shown in the Writing files section.
+## Quick start
+Every type takes a `rootPath` (where to read from) and an `outPath` (where to write to).
 
 ```cs
-//packed game data, root path must be the folder where the game .exe is located
-var eldenRingData = GameData.InitGameData_PostEldenRing(@"C:\SteamLibrary\steamapps\common\ELDEN RING\Game", @"D:\outputfolder", BHD5.Game.EldenRing);
-var armoredCore6Data = GameData.InitGameData_PostEldenRing(@"C:\SteamLibrary\steamapps\common\ARMORED CORE VI FIRES OF RUBICON\Game", @"D:\outputfolder", BHD5.Game.ArmoredCore6);
+// packed PC data: rootPath is the folder with the game .exe
+var er  = GameData.InitGameData_PostEldenRing(@"C:\...\ELDEN RING\Game", @"D:\out", BHD5.Game.EldenRing);
+var ds3 = GameData.InitGameData_PreEldenRing(@"C:\...\Dark Souls III", @"D:\out", BHD5.Game.DarkSouls3);
 
-var darkSouls3Data = GameData.InitGameData_PreEldenRing(@"C:\SteamLibrary\steamapps\common\Dark Souls III", @"D:\outputfolder", BHD5.Game.DarkSouls3);
-var sekiroEncData = GameData.InitGameData_PreEldenRing(@"C:\SteamLibrary\steamapps\common\Sekiro", @"D:\outputfolder", BHD5.Game.Sekiro);
+// unpacked data: rootPath contains chr, map, etc.
+var sekiro = GameData.InitGameData_Decrypted(@"D:\UnpackedSekiro", @"D:\out");
 
-//unpacked game data, root path must be where all the unpacked folders are like chr, map etc.
-var sekiroDecData = GameData.InitGameData_Decrypted(@"D:\pathToUnpackedSekiro", @"D:\outputfolder");
-var bloodborneDecData = GameData.InitGameData_Decrypted(@"D:\pathToUnpackedBloodborne", @"D:\outputfolder");
-
-//PKG game data, root path must point to the pkg itself
-var bloodbornePkgData = GameData.InitGameData_PKG(@"D:\Bloodborne.pkg", @"D:\outputfolder");
-var eldenRingCntData = GameData.InitGameData_PKG(@"D:\EldenRingCNT.pkg", @"D:\outputfolder");
-var darkSouls3PkgData = GameData.InitGameData_PKG(@"D:\DarkSouls3.pkg", @"D:\outputfolder");
+// PKG: rootPath is the .pkg itself
+var bb = GameData.InitGameData_PKG(@"D:\Bloodborne.pkg", @"D:\out");
 ```
 
-## Usage
-
-We will use the example games from the Initialization section.
-
-### Reading data
-There are two (well, four) overloads for reading files:
-* Read one specific file: `Get(relativePath)`
-* Read multiple files by a provided pattern: `Get(relativePath, pattern, bool load = true)`
-
-A `GameFile` is returned, which contains the `Path`, `Bytes` and `Data` of the file. `Data` is a `ISoulsFile`, which can be parsed automatically if you pass the correct delegate to the remaining two overloads:
-* `Get(relativePath, Func<Memory<byte>, ISoulsFile> load)`
-* `Get(relativePath, pattern, Func<Memory<byte>, ISoulsFile> load)`
-
-It will make more sense with the examples just below.
-
-#### Reading one file
-
-The first overload takes a `relativePath` parameter. The returned file's bytes can be used simply with SoulsFormats. **If a file doesn't exist, it returns empty bytes! (not null).**
+## Reading
+`Get` returns a `GameFile` with `Path`, `Bytes` and `Data` (an `ISoulsFile`, filled when you pass a parser).
 
 ```cs
-var bndFile = eldenRingData.Get("/chr/c2120.chrbnd.dcx");
-var malenia = BND4.Read(bndFile.Bytes);
-//any modification you do to 'malenia' will not be reflected back on the Data property of 'bndFile' obviously
+// one file
+var chr = er.Get("/chr/c2120.chrbnd.dcx");
+var bnd = BND4.Read(chr.Bytes);
 
-var paramBnd = bloodbornePkgData.Get("/param/gameparam/gameparam.parambnd.dcx", BND4.Read);
-//this way the BND4.Read function is called automatically, and the 'Data' property is filled
-//unfortunately paramBnd.Data will have to be cast as BND4 if you want to work with it
-```
+// one file, parsed into .Data
+var param = bb.Get("/param/gameparam/gameparam.parambnd.dcx", BND4.Read);
 
-#### Reading multiple files
-
-The second overload takes a `relativePath`, `pattern` and an optional bool `load` parameter. The return value is an enumerable `GameFile` collection -- if the `load` parameter is false, the file bytes won't be loaded, they will be empty. (This can be useful if you want to check what files are actually present by a pattern for example.) **Only existing files will be present in the collection.**
-
-The `pattern` parameter works similarly on how you would search in Windows file explorer.
-
-Let's take a look on how to use this to get all chrbnds:
-```cs
-var allChrs = darkSouls3PkgData.Get("/chr", "*chrbnd.dcx", true);
-foreach (var gamefile in allChrs)
+// many files by pattern (Windows Explorer-style wildcards)
+foreach (var msb in er.Get("/map/mapstudio", "m60*.msb*", MSBE.Read))
 {
-    var chr = BND4.Read(gamefile.Bytes);
+    var m = (MSBE)msb.Data;
 }
 ```
 
-Another example to load all `.msb` files for the Overworld in Elden Ring (`m60`).
+- A missing file returns **empty bytes, not null**.
+- Pattern queries only return files that exist. Pass `load: false` to list files without loading their bytes.
 
+## Writing
 ```cs
-var allMsbs = eldenRingData.Get("/map/mapstudio", "m60*.msb*", MSBE.Read);
-foreach (var gamefile in allMsbs)
-{
-    //do something to MSBE through gamefile.Data
-}
+er.Set("/chr/c2120.chrbnd.dcx", bnd.Write()); // -> D:\out\chr\c2120.chrbnd.dcx
+
+// or, if .Data is set:
+msb.Write(er);
 ```
 
-### Writing data
-
-There's (only) two methods for writing files: `Set(..)` and `SetMem(..)`. You guessed it, they take a `relativePath` parameter, and either a `byte[]` or `Memory<byte>` data this time around. These methods will always output into the `outPath` folder set earlier in the Initialization section.
-```cs
-var bndFile = eldenRingData.Get("/chr/c2120.chrbnd.dcx");
-var malenia = BND4.Read(bndFile.Bytes);
-
-//do something to malenia bnd
-
-//then to write file:
-eldenRingData.Set(bndFile.Path, malenia.Write());
-eldenRingData.SetMem("/chr/c2120.chrbnd.dcx", malenia.Write());
-//you can set the relativePath to anything.
-//in both these cases our output file's full path will be: "D:\outputfolder\chr\c2120.chrbnd.dcx"
-
-//OR use the write method available through the 'bndFile' instance, only if you passed a delegate to fill the 'Data' property
-//for the simplicity of this example I will set it by hand, which is allowed.
-//This following line is NOT needed if you pass the delegate. (like in the next example)
-bndFile.Data = malenia;
-bndFile.Write(eldenRingData);
-```
-
-Example with writing multiple files:
-```cs
-var allMsbs = eldenRingData.Get("/map/mapstudio", "m60*.msb*", MSBE.Read);
-foreach (var msb in allMsbs)
-{
-    //do something to msb through 'msb.Data'
-    //then simply
-    msb.Write(eldenRingData);
-}
-```
+## How it works
+- **BHD cache** — on first run, BHDs are decrypted with the keys in the working `Data` folder and cached as `.bhdcache` (MD5-checked). Later runs load the cache for fast startup; invalid caches are rebuilt. BDT files are decrypted on demand.
+- **Unsupported games** — keys are read from the game exe and dumped. Without a file dictionary, pattern lookups won't work; files you request by exact path are recorded and dumped to `Data` on shutdown.
+- **PKG patches** — files present in a patch are read from it instead of the base pkg.
 
 ## Dependencies
-#### [SoulsFormats](https://github.com/kotn3l/SoulsFormats)
-A custom SoulsFormats, that is still using the MemoryMappedFile shenanigans. I just love how performant that is. Updates were manually brought over from [SoulsFormatsNext](https://github.com/soulsmods/SoulsFormatsNEXT).
+- [SoulsFormats](https://github.com/kotn3l/SoulsFormats/tree/newest) — fork keeping MemoryMappedFile support, synced with [SoulsFormatsNEXT](https://github.com/soulsmods/SoulsFormatsNEXT), plus a BHD5 header dictionary for fast hash lookups.
+- [LibOrbisPkg](https://github.com/kotn3l/LibOrbisPkg) — ported to modern .NET.
+- BouncyCastle.Cryptography, CommunityToolkit.HighPerformance, DotNext.IO, DotNext.Unsafe, ZstdNet
 
-Added some custom ToStrings and other stuff needed for my yet unreleased conversion tool, but most importantly for this library, I have introduced a Dictionary for the BHD5 FileHeaders, which allows for ultra-fast lookups with the filehashes.
+## Logging
+Uses Serilog, writing to the console by default.
 
-Current branch: [newest](https://github.com/kotn3l/SoulsFormats/tree/newest)
-
-#### [LibOrbisPkg](https://github.com/kotn3l/LibOrbisPkg)
-I ported the library from NET Framework to .NET. Because of too many test framework errors I removed the tests. <sub>(for now, don't @ me--).</sub> Quite slow, could use some refactors.
-
-#### Others
-* BouncyCastle.Cryptography
-* CommunityToolkit.HighPerformance
-* DotNext.IO
-* DotNext.Unsafe
-* ZstdNet
-
-## Screenshot
-The tool is using Serilog for logging, which is default set to write to Console. It looks pretty imo:
 ![Log](/img/logpic.png?raw=true "Log")
 
 ## Credits
-This wouldn't be possible without the amazing modding community these games have. Thank you all!, but most notably:
+Thanks to the modding community, especially:
 * TGKP
 * Nordgaren
 * Smithbox contributors
 * SoulsFormatsNEXT contributors
 * Meowmaritus
-
-<sub>if I missed anyone message me</sub>

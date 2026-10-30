@@ -1,4 +1,5 @@
-﻿using LibOrbisPkg.PFS;
+﻿using DotNext.IO.MemoryMappedFiles;
+using LibOrbisPkg.PFS;
 using LibOrbisPkg.PKG;
 using LibOrbisPkg.Util;
 using System.Diagnostics;
@@ -122,7 +123,7 @@ namespace DantelionDataManager
             return regex;
         }
 
-        public IEnumerable<KeyValuePair<string, Memory<byte>>> InternalGetMem(string relativePath, string pattern, bool load)
+        public IEnumerable<GameFile> InternalGetMem(string relativePath, string pattern, bool load)
         {
             var regex = GetMemSetup(ref relativePath, pattern);
             foreach (var item in GetMatchedFiles(relativePath, regex))
@@ -130,26 +131,26 @@ namespace DantelionDataManager
                 string s = item.FullName["/uroot".Length..];
                 if (load)
                 {
-                    yield return new KeyValuePair<string, Memory<byte>>(s, GetFile(item.FullName));
+                    yield return new GameFile(s, GetFile(item.FullName));
                 }
                 else
                 {
-                    yield return new KeyValuePair<string, Memory<byte>>(s, Memory<byte>.Empty);
+                    yield return new GameFile(s, Memory<byte>.Empty);
                 }
             }
         }
 
         public override GameFile Get(string relativePath)
         {
-            var bytes = GetFile(relativePath);
-            return new GameFile(relativePath, bytes);
+            return new GameFile(relativePath,GetFile(relativePath));
         }
 
         public override byte[] GetRegulation(string rootPath)
         {
             if (rootPath == RootPath)
             {
-                return GetFile("/regulation.bin");
+                //return GetFile("/regulation.bin");
+                return null;
             }
             else return base.GetRegulation(rootPath);
         }
@@ -160,7 +161,7 @@ namespace DantelionDataManager
             return fs.Select(x => x.Value).OrderBy(f => f.FullName);
         }
 
-        private byte[] GetFile(string relativePath)
+        private IMappedMemory GetFile(string relativePath)
         {
             string fullpath = CheckPath(relativePath);
             _log.LogDebug(this, _logid, "Searching for file {f}", relativePath);
@@ -174,8 +175,6 @@ namespace DantelionDataManager
             if (f != null)
             {
                 _log.LogDebug(this, $"PKG:{f.offset}", "Found {f} matching, size={s}", f.FullName, f.size);
-                //f.Save(@$"S:\FROMSOFT_COLLECTION\PKGs\{f.name}");
-                //var buf = new byte[0x10000];
                 using (var mem = new MemoryStream())
                 {
                     var sz = f.size;
@@ -197,12 +196,17 @@ namespace DantelionDataManager
                         sz -= toRead;
                     }
                     mem.Flush();
-                    return mem.ToArray();
+                    var array = mem.ToArray();
+                    var mmf = MemoryMappedFile.CreateNew(null, mem.Length, MemoryMappedFileAccess.ReadWrite);
+                    var mappedMemory = mmf.CreateMemoryAccessor(0, (int)mem.Length, MemoryMappedFileAccess.ReadWrite);
+                    array.AsSpan().CopyTo(mappedMemory.Span);
+
+                    return mappedMemory;
                 }
             }
             else
             {
-                return Array.Empty<byte>();
+                return null;
             }
         }
 
@@ -212,7 +216,7 @@ namespace DantelionDataManager
             {
                 Parallel.ForEach(InternalGetMem("/", "*", true), file =>
                 {
-                    Set("/dump/" + file.Key, file.Value);
+                    //Set("/dump/" + file.Key, file.Value);
                 });
             }
             else
